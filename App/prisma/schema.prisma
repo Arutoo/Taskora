@@ -1,0 +1,191 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  leader
+  member
+}
+
+enum Priority {
+  high
+  medium
+  low
+}
+
+enum TaskStatus {
+  todo
+  in_progress
+  done
+}
+
+enum NotificationType {
+  invited
+  task_assigned
+  commented
+  replied
+  deadline_reminder
+  task_verified
+  status_changed
+}
+
+enum ActionType {
+  task_created
+  status_changed
+  task_verified
+  member_joined
+  shortcut_added
+  comment_added
+}
+
+enum ReferenceType {
+  task
+  workspace
+  comment
+}
+
+model User {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name          String   @db.VarChar(100)
+  email         String   @unique @db.VarChar(255)
+  password_hash String   @db.VarChar(255)
+  created_at    DateTime @default(now())
+
+  refresh_tokens    RefreshToken[]
+  workspace_members WorkspaceMember[]
+  workspaces_owned  Workspace[]       @relation("WorkspaceCreator")
+  tasks_created     Task[]            @relation("TaskCreator")
+  task_assignees    TaskAssignee[]
+  comments          Comment[]
+  notifications     Notification[]
+  activity_logs     ActivityLog[]
+  shortcuts         ResourceShortcut[]
+}
+
+model RefreshToken {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  token_hash String   @db.VarChar(255)
+  user_id    String   @db.Uuid
+  expires_at DateTime
+  is_revoked Boolean  @default(false)
+  created_at DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+}
+
+model Workspace {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String   @db.VarChar(150)
+  description String?
+  is_archived Boolean  @default(false)
+  created_by  String   @db.Uuid
+  created_at  DateTime @default(now())
+
+  creator       User              @relation("WorkspaceCreator", fields: [created_by], references: [id])
+  members       WorkspaceMember[]
+  tasks         Task[]
+  activity_logs ActivityLog[]
+  shortcuts     ResourceShortcut[]
+}
+
+model WorkspaceMember {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspace_id String   @db.Uuid
+  user_id      String   @db.Uuid
+  role         Role
+  joined_at    DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([workspace_id, user_id])
+}
+
+model Task {
+  id           String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspace_id String     @db.Uuid
+  title        String     @db.VarChar(200)
+  description  String?
+  priority     Priority
+  status       TaskStatus @default(todo)
+  is_verified  Boolean    @default(false)
+  is_overdue   Boolean    @default(false)
+  start_date   DateTime?  @db.Date
+  deadline     DateTime?  @db.Date
+  created_by   String     @db.Uuid
+  created_at   DateTime   @default(now())
+  updated_at   DateTime   @default(now()) @updatedAt
+
+  workspace  Workspace      @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+  creator    User           @relation("TaskCreator", fields: [created_by], references: [id])
+  assignees  TaskAssignee[]
+  comments   Comment[]
+}
+
+model TaskAssignee {
+  id      String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  task_id String @db.Uuid
+  user_id String @db.Uuid
+
+  task Task @relation(fields: [task_id], references: [id], onDelete: Cascade)
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([task_id, user_id])
+}
+
+model Comment {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  task_id    String   @db.Uuid
+  user_id    String   @db.Uuid
+  parent_id  String?  @db.Uuid
+  content    String
+  created_at DateTime @default(now())
+
+  task    Task      @relation(fields: [task_id], references: [id], onDelete: Cascade)
+  user    User      @relation(fields: [user_id], references: [id])
+  parent  Comment?  @relation("CommentReplies", fields: [parent_id], references: [id])
+  replies Comment[] @relation("CommentReplies")
+}
+
+model Notification {
+  id             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id        String           @db.Uuid
+  type           NotificationType
+  reference_id   String?          @db.Uuid
+  reference_type ReferenceType?
+  message        String
+  is_read        Boolean          @default(false)
+  created_at     DateTime         @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+}
+
+model ActivityLog {
+  id             String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspace_id   String         @db.Uuid
+  user_id        String         @db.Uuid
+  action_type    ActionType
+  reference_id   String?        @db.Uuid
+  reference_type ReferenceType?
+  created_at     DateTime       @default(now())
+
+  workspace Workspace @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [user_id], references: [id])
+}
+
+model ResourceShortcut {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspace_id String   @db.Uuid
+  added_by     String   @db.Uuid
+  label        String   @db.VarChar(100)
+  url          String
+  created_at   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [added_by], references: [id])
+}
