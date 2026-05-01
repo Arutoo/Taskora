@@ -1,6 +1,11 @@
-import React from "react";
+import type { Task } from "../lib/mock-data";
 
-export default function TaskRow({ task, onClick }) {
+type TaskRowProps = {
+  task: Task;
+  onClick: () => void;
+};
+
+export default function TaskRow({ task, onClick }: TaskRowProps) {
   const statusClass =
     task.status === "in_progress"
       ? "statusDot statusInProgress"

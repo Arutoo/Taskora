@@ -1,9 +1,16 @@
-import React from "react";
+type Deadline = {
+  date: number;
+  color: string;
+};
 
-export default function CalendarWidget({ deadlines }) {
+type CalendarWidgetProps = {
+  deadlines: Deadline[];
+};
+
+export default function CalendarWidget({ deadlines }: CalendarWidgetProps) {
   const days = Array.from({ length: 31 }, (_, i) => i + 1);
 
-  const colorForDay = (day) => {
+  const colorForDay = (day: number) => {
     const hit = deadlines.find((d) => d.date === day);
     return hit?.color;
   };

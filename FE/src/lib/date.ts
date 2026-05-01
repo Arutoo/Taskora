@@ -1,10 +1,10 @@
-export function formatDate(iso) {
+export function formatDate(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "2-digit" });
 }
 
-export function formatDueDate(iso) {
+export function formatDueDate(iso: string): { text: string; urgent: boolean } {
   const d = new Date(iso);
   const now = new Date();
   if (Number.isNaN(d.getTime())) return { text: iso, urgent: false };
