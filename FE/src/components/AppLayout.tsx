@@ -12,7 +12,7 @@ type AppLayoutProps = {
 };
 
 export default function AppLayout({ children }: AppLayoutProps) {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, logout } = useAuth();
   const [workspaces, setWorkspaces] = useState<ApiWorkspace[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -53,6 +53,9 @@ export default function AppLayout({ children }: AppLayoutProps) {
   }, [isAuthenticated]);
 
   const firstWorkspaceId = workspaces[0]?.id;
+  const handleLogout = () => {
+    void logout();
+  };
 
   return (
     <div className="appShell">
@@ -114,6 +117,12 @@ export default function AppLayout({ children }: AppLayoutProps) {
                 Assigned Tasks
               </div>
             )}
+          </div>
+          <div className="navSection accountSection">
+            <div className="navSectionTitle">Account</div>
+            <button className="navItem navItemButton" type="button" onClick={handleLogout}>
+              Sign out
+            </button>
           </div>
         </nav>
       </aside>

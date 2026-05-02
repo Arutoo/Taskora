@@ -7,7 +7,7 @@ export type AuthContextValue = {
   refreshToken: string | null;
   user: ApiUser | null;
   login: (payload: AuthResponse) => void;
-  logout: () => void;
+  logout: () => Promise<void>;
 };
 
 export const AuthContext = createContext<AuthContextValue | null>(null);

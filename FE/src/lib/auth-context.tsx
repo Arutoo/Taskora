@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { AuthContext } from "./auth-context-base";
 import type { AuthResponse } from "./api/types";
 import { clearStoredAuth, readStoredAuth, writeStoredAuth } from "./auth-storage";
+import { logoutRequest } from "./api/auth";
 
 type AuthProviderProps = {
   children: ReactNode;
@@ -26,9 +27,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setAuth(nextAuth);
   };
 
-  const logout = () => {
-    clearStoredAuth();
-    setAuth(null);
+
+  const logout = async () => {
+    const refreshToken = auth?.refreshToken ?? null;
+    try {
+      if (refreshToken) {
+        await logoutRequest(refreshToken);
+      }
+    } catch {
+    } finally {
+      clearStoredAuth();
+      setAuth(null);
+    }
   };
 
   const value = useMemo(

@@ -82,6 +82,9 @@ a { color: inherit; }
   background: hsl(220 20% 8%);
   border-right: 1px solid color-mix(in srgb, var(--c-border) 65%, transparent);
   padding: 16px;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
 }
 
 .sidebarHeader {
@@ -96,7 +99,7 @@ a { color: inherit; }
   letter-spacing: 0.2px;
 }
 
-.sidebarNav { display: flex; flex-direction: column; gap: 8px; }
+.sidebarNav { display: flex; flex-direction: column; gap: 8px; flex: 1; }
 .navSectionTitle {
   margin-top: 12px;
   font-size: 12px;
@@ -130,6 +133,7 @@ a { color: inherit; }
   border-color: color-mix(in srgb, var(--c-primary) 35%, transparent);
 }
 .navSection { display: flex; flex-direction: column; gap: 6px; }
+.accountSection { margin-top: auto; }
 
 .navItem {
   display: flex;
@@ -141,6 +145,18 @@ a { color: inherit; }
   padding: 10px 12px;
   border-radius: 10px;
   transition: background 150ms ease, color 150ms ease;
+}
+.navItemButton {
+  width: 100%;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  cursor: pointer;
+  text-align: left;
 }
 .navItem:hover { background: color-mix(in srgb, var(--c-secondary) 70%, transparent); color: var(--c-foreground); }
 .navItem.active {
