@@ -1,0 +1,12 @@
+Defects
+1.When adding a new member you can add your own account as different team member
+2.When adding another new member it overwrites the other member
+3.When pressing assigned task it always goes to the top project even when there is multiple other project
+Severity:
+1. High
+2. Critical
+3. Medium
+Fixes :
+1. Add a validation so it checks if its our email or not then add a message so it tells the user it cant add yourself
+2. Maybe add a create Join table? Idk
+3. Maybe Make it so that every task has to have its own projectid
