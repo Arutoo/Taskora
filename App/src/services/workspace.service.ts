@@ -2,13 +2,26 @@ import { AppError } from '../types';
 import { signInviteToken, verifyInviteToken } from '../utils/jwt';
 import * as workspaceRepo from '../repositories/workspace.repository';
 import * as userRepo from '../repositories/user.repository';
+import * as notificationService from './notification.service';
+import * as activityLogService from './activityLog.service';
+import { NotificationType, ReferenceType } from '@prisma/client';
 
 export async function createWorkspace(
   userId: string,
   name: string,
   description?: string,
 ) {
-  return workspaceRepo.createWorkspace({ name, description, created_by: userId });
+  const workspace = await workspaceRepo.createWorkspace({ name, description, created_by: userId });
+
+  await activityLogService.log({
+    workspace_id: workspace.id,
+    user_id: userId,
+    action_type: 'member_joined',
+    reference_id: workspace.id,
+    reference_type: ReferenceType.workspace,
+  });
+
+  return workspace;
 }
 
 export async function listWorkspaces(userId: string) {
@@ -53,6 +66,22 @@ export async function inviteByEmail(
 
   await workspaceRepo.addMember(workspaceId, user.id);
 
+  await activityLogService.log({
+    workspace_id: workspaceId,
+    user_id: user.id,
+    action_type: 'member_joined',
+    reference_id: workspaceId,
+    reference_type: ReferenceType.workspace,
+  });
+
+  await notificationService.createAndPush({
+    user_id: user.id,
+    type: NotificationType.invited,
+    message: `You have been added to a workspace`,
+    reference_id: workspaceId,
+    reference_type: ReferenceType.workspace,
+  });
+
   return { message: 'User added to workspace', userId: user.id };
 }
 
@@ -67,6 +96,14 @@ export async function joinViaToken(token: string, userId: string) {
   if (existing) throw new AppError('Already a member of this workspace', 409);
 
   await workspaceRepo.addMember(payload.workspaceId, userId);
+
+  await activityLogService.log({
+    workspace_id: payload.workspaceId,
+    user_id: userId,
+    action_type: 'member_joined',
+    reference_id: payload.workspaceId,
+    reference_type: ReferenceType.workspace,
+  });
 
   return ws;
 }
