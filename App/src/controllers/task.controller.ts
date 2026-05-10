@@ -57,7 +57,7 @@ export async function listTasks(req: AuthRequest, res: Response, next: NextFunct
 
 export async function getTask(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
   try {
-    const task = await taskService.getTask(req.params.taskId as string);
+    const task = await taskService.getTask(req.params.taskId as string, req.params.id as string);
     ok(res, task);
   } catch (err) {
     next(err);
@@ -84,7 +84,7 @@ export async function editTask(req: AuthRequest, res: Response, next: NextFuncti
 
 export async function deleteTask(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
   try {
-    await taskService.deleteTask(req.params.taskId as string);
+    await taskService.deleteTask(req.params.taskId as string, req.params.id as string);
     ok(res, null, 'Task deleted');
   } catch (err) {
     next(err);

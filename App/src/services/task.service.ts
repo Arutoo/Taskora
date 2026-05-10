@@ -65,9 +65,9 @@ export async function listTasks(
   });
 }
 
-export async function getTask(taskId: string) {
+export async function getTask(taskId: string, workspaceId: string) {
   const task = await taskRepo.findTaskById(taskId);
-  if (!task) throw new AppError('Task not found', 404);
+  if (!task || task.workspace_id !== workspaceId) throw new AppError('Task not found', 404);
   return task;
 }
 
@@ -84,7 +84,7 @@ export async function editTask(
   workspaceId: string,
 ) {
   const task = await taskRepo.findTaskById(taskId);
-  if (!task) throw new AppError('Task not found', 404);
+  if (!task || task.workspace_id !== workspaceId) throw new AppError('Task not found', 404);
 
   if (data.assigneeIds) {
     for (const uid of data.assigneeIds) {
@@ -98,17 +98,20 @@ export async function editTask(
   return updated;
 }
 
-export async function deleteTask(taskId: string) {
+export async function deleteTask(taskId: string, workspaceId: string) {
   const task = await taskRepo.findTaskById(taskId);
-  if (!task) throw new AppError('Task not found', 404);
+  if (!task || task.workspace_id !== workspaceId) throw new AppError('Task not found', 404);
   return taskRepo.deleteTask(taskId);
 }
 
 export async function updateStatus(taskId: string, userId: string, status: TaskStatus, workspaceId: string) {
+  const task = await taskRepo.findTaskById(taskId);
+  if (!task || task.workspace_id !== workspaceId) throw new AppError('Task not found', 404);
+
   const isAssignee = await taskRepo.isAssignee(taskId, userId);
   if (!isAssignee) throw new AppError('Only assigned members can update task status', 403);
 
-  const task = await taskRepo.updateTaskStatus(taskId, status);
+  const updatedTask = await taskRepo.updateTaskStatus(taskId, status);
 
   await activityLogService.log({
     workspace_id: workspaceId,
@@ -135,12 +138,12 @@ export async function updateStatus(taskId: string, userId: string, status: TaskS
     }
   }
 
-  return task;
+  return updatedTask;
 }
 
 export async function verifyTask(taskId: string, leaderId: string, workspaceId: string) {
   const task = await taskRepo.findTaskById(taskId);
-  if (!task) throw new AppError('Task not found', 404);
+  if (!task || task.workspace_id !== workspaceId) throw new AppError('Task not found', 404);
   if (task.status !== TaskStatus.done) throw new AppError('Task must be done before verifying', 400);
   if (task.is_verified) throw new AppError('Task already verified', 409);
 
