@@ -1,11 +1,9 @@
 import { motion } from "framer-motion";
 import { ArrowLeft, UserPlus } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { createWorkspace, inviteToWorkspace } from "../lib/api/workspaces";
-
-const COLOR_OPTIONS = ["#3FE0CA", "#7C5CFF", "#FF6AA2", "#F7B441", "#36D38E", "#5AA7FF"] as const;
+import { createInviteLink, createWorkspace, inviteToWorkspace } from "../lib/api/workspaces";
 
 type MemberRole = "leader" | "member";
 
@@ -21,12 +19,15 @@ type ProjectMember = {
 
 export default function CreateProject() {
   const navigate = useNavigate();
-  const [selectedColor, setSelectedColor] = useState<(typeof COLOR_OPTIONS)[number]>(COLOR_OPTIONS[0]);
   const [memberEmail, setMemberEmail] = useState("");
   const [members, setMembers] = useState<ProjectMember[]>([{ id: "leader", email: "You", role: "leader" }]);
   const [results, setResults] = useState<DirectoryEntry[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [shouldGenerateLink, setShouldGenerateLink] = useState(false);
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [linkError, setLinkError] = useState<string | null>(null);
+  const submitLock = useRef(false);
 
   const resultLabel = useMemo(() => {
     if (!memberEmail.trim()) return "";
@@ -49,9 +50,11 @@ export default function CreateProject() {
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (isSubmitting) return;
+    if (isSubmitting || submitLock.current) return;
+    submitLock.current = true;
     setIsSubmitting(true);
     setError(null);
+    setLinkError(null);
 
     try {
       const form = event.currentTarget;
@@ -66,15 +69,40 @@ export default function CreateProject() {
 
       const invitees = members.filter((m) => m.role === "member").map((m) => m.email);
       if (invitees.length > 0) {
-        await Promise.allSettled(invitees.map((email) => inviteToWorkspace(workspace.id, email)));
+        const results = await Promise.allSettled(invitees.map((email) => inviteToWorkspace(workspace.id, email)));
+        const failed = results.some((result) => result.status === "rejected");
+        if (failed) {
+          setError("Some invites failed. Make sure each email is registered.");
+        }
       }
 
-      navigate(-1);
+      let link: string | null = null;
+      if (shouldGenerateLink) {
+        const { inviteToken } = await createInviteLink(workspace.id);
+        link = `${window.location.origin}/join/${workspace.id}?token=${inviteToken}`;
+        setInviteLink(link);
+      }
+
+      navigate(`/project/${workspace.id}`, {
+        replace: true,
+        state: link ? { inviteLink: link } : undefined,
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to create workspace";
       setError(message);
+      submitLock.current = false;
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleCopyLink = async () => {
+    if (!inviteLink) return;
+    try {
+      await navigator.clipboard.writeText(inviteLink);
+      setLinkError(null);
+    } catch {
+      setLinkError("Failed to copy link. Please copy it manually.");
     }
   };
 
@@ -113,22 +141,6 @@ export default function CreateProject() {
           </label>
 
           <div className="formField">
-            <span className="formLabel">Project Color</span>
-            <div className="colorRow">
-              {COLOR_OPTIONS.map((color) => (
-                <button
-                  key={color}
-                  type="button"
-                  className={color === selectedColor ? "colorSwatch active" : "colorSwatch"}
-                  style={{ backgroundColor: color }}
-                  onClick={() => setSelectedColor(color)}
-                  aria-label={`Select ${color} color`}
-                />
-              ))}
-            </div>
-          </div>
-
-          <div className="formField">
             <span className="formLabel">Add Members</span>
             <div className="memberList">
               {members.map((member) => (
@@ -150,6 +162,7 @@ export default function CreateProject() {
                   onChange={(event) => setMemberEmail(event.target.value)}
                   onKeyDown={(event) => {
                     if (event.key === "Enter") {
+                      event.preventDefault();
                       handleLookup();
                     }
                   }}
@@ -177,12 +190,33 @@ export default function CreateProject() {
             </div>
           </div>
 
+          <div className="formField">
+            <span className="formLabel">Invite Link</span>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--c-muted-foreground)" }}>
+              <input
+                type="radio"
+                checked={shouldGenerateLink}
+                onChange={(event) => setShouldGenerateLink(event.target.checked)}
+              />
+              Generate a shareable link after creating the project
+            </label>
+            {inviteLink ? (
+              <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+                <input className="formInput" value={inviteLink} readOnly />
+                <button className="ghostBtn" type="button" onClick={handleCopyLink}>
+                  Copy link
+                </button>
+              </div>
+            ) : null}
+            {linkError ? <p className="muted" style={{ margin: "8px 0 0" }}>{linkError}</p> : null}
+          </div>
+
           <div className="formActions">
             <button className="ghostBtn" type="button" onClick={() => navigate(-1)}>
               Cancel
             </button>
-            <button className="primaryBtn" type="submit">
-              {isSubmitting ? "Creating..." : "Create Project"}
+            <button className="primaryBtn" type="submit" disabled={isSubmitting}>
+              {isSubmitting ? "Creating..." : shouldGenerateLink ? "Create & generate link" : "Create Project"}
             </button>
           </div>
           {error ? <p className="muted" style={{ margin: "12px 0 0" }}>{error}</p> : null}

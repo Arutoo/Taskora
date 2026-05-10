@@ -1,11 +1,16 @@
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 import { Plus } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { listWorkspaces } from "../lib/api/workspaces";
 import type { ApiWorkspace } from "../lib/api/types";
 import { colorFromName } from "../lib/color";
 import { useAuth } from "../lib/use-auth";
+import { io, type Socket } from "socket.io-client";
+import { readStoredAuth } from "../lib/auth-storage";
+import { pushStoredNotification, readUnreadCount } from "../lib/notifications-storage";
+import { useTheme } from "../hooks/use-theme";
+import { Sun, Moon } from "lucide-react";
 
 type AppLayoutProps = {
   children: ReactNode;
@@ -13,9 +18,12 @@ type AppLayoutProps = {
 
 export default function AppLayout({ children }: AppLayoutProps) {
   const { isAuthenticated, logout } = useAuth();
+  const location = useLocation();
   const [workspaces, setWorkspaces] = useState<ApiWorkspace[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const socketRef = useRef<Socket | null>(null);
+  const { theme, toggleTheme } = useTheme();
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -32,7 +40,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
         setError(null);
         const data = await listWorkspaces();
         if (isActive) {
-          setWorkspaces(data);
+          setWorkspaces(data.filter((workspace) => !workspace.is_archived));
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : "Failed to load workspaces";
@@ -50,9 +58,39 @@ export default function AppLayout({ children }: AppLayoutProps) {
     return () => {
       isActive = false;
     };
+  }, [isAuthenticated, location.pathname]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const accessToken = readStoredAuth()?.accessToken ?? null;
+    if (!accessToken) return;
+    const socketUrl = (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:3000";
+
+    const socket = io(socketUrl, {
+      auth: { token: accessToken },
+      transports: ["websocket"],
+    });
+
+    socketRef.current = socket;
+    socket.on("notification:new", (data: { id?: string; message?: string; created_at?: string }) => {
+      if (!data?.message) return;
+      const list = pushStoredNotification(data);
+      window.dispatchEvent(
+        new CustomEvent("taskora:notification", {
+          detail: { notification: data, list, unread: readUnreadCount() },
+        })
+      );
+    });
+
+    return () => {
+      socket.off("notification:new");
+      socket.disconnect();
+      socketRef.current = null;
+    };
   }, [isAuthenticated]);
 
-  const firstWorkspaceId = workspaces[0]?.id;
+  const routeMatch = location.pathname.match(/^\/project\/([^/]+)/);
+  const activeWorkspaceId = routeMatch?.[1] ?? workspaces[0]?.id;
   const handleLogout = () => {
     void logout();
   };
@@ -63,6 +101,14 @@ export default function AppLayout({ children }: AppLayoutProps) {
         <div className="sidebarHeader">
           <div className="brand">Taskora</div>
           <div className="sidebarSpacer" />
+          <button
+            onClick={toggleTheme}
+            className="themeToggle"
+            aria-label="Toggle theme"
+            title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+          >
+            {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+          </button>
         </div>
 
         <nav className="sidebarNav">
@@ -105,9 +151,9 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
           <div className="navSectionTitle">Workspace</div>
           <div className="navSection">
-            {firstWorkspaceId ? (
+            {activeWorkspaceId ? (
               <NavLink
-                to={`/project/${firstWorkspaceId}/tasks`}
+                to={`/project/${activeWorkspaceId}/tasks`}
                 className={({ isActive }) => (isActive ? "navItem active" : "navItem")}
               >
                 Assigned Tasks

@@ -1,7 +1,18 @@
-import type { Task } from "../lib/mock-data";
+type TaskRowStatus = "not_started" | "in_progress" | "completed" | "todo" | "done";
+
+export type TaskRowItem = {
+  id: string;
+  title: string;
+  status: TaskRowStatus;
+  dueDate: string;
+  dueUrgent?: boolean;
+  project: string;
+  assignee: string;
+  workspaceId?: string;
+};
 
 type TaskRowProps = {
-  task: Task;
+  task: TaskRowItem;
   onClick: () => void;
 };
 
@@ -9,9 +20,12 @@ export default function TaskRow({ task, onClick }: TaskRowProps) {
   const statusClass =
     task.status === "in_progress"
       ? "statusDot statusInProgress"
-      : task.status === "completed"
+      : task.status === "completed" || task.status === "done"
         ? "statusDot statusCompleted"
         : "statusDot statusNotStarted";
+
+  const isCompleted = task.status === "completed" || task.status === "done";
+  const dueLabel = isCompleted ? "Completed" : task.dueDate;
 
   return (
     <button type="button" onClick={onClick} className="taskRow">
@@ -24,7 +38,16 @@ export default function TaskRow({ task, onClick }: TaskRowProps) {
           {task.project} • {task.assignee}
         </div>
       </div>
-      <div className="taskDue font-mono">{task.dueDate}</div>
+      <div
+        className="taskDue font-mono"
+        style={
+          task.dueUrgent && !isCompleted
+            ? { color: "#F45D5D", fontWeight: 800 }
+            : undefined
+        }
+      >
+        {dueLabel}
+      </div>
     </button>
   );
 }
