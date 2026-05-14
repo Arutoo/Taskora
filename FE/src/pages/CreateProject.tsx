@@ -4,10 +4,14 @@ import { useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { createInviteLink, createWorkspace, inviteToWorkspace } from "../lib/api/workspaces";
+import { listUsers } from "../lib/api/users";
+import { useAuth } from "../lib/use-auth";
 
 type MemberRole = "leader" | "member";
 
 type DirectoryEntry = {
+  id: string;
+  name: string;
   email: string;
 };
 
@@ -19,10 +23,12 @@ type ProjectMember = {
 
 export default function CreateProject() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [memberEmail, setMemberEmail] = useState("");
   const [members, setMembers] = useState<ProjectMember[]>([{ id: "leader", email: "You", role: "leader" }]);
   const [results, setResults] = useState<DirectoryEntry[]>([]);
   const [lookupError, setLookupError] = useState<string | null>(null);
+  const [isLookingUpMember, setIsLookingUpMember] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [shouldGenerateToken, setShouldGenerateToken] = useState(false);
@@ -32,27 +38,43 @@ export default function CreateProject() {
 
   const resultLabel = useMemo(() => {
     if (!memberEmail.trim()) return "";
+    if (isLookingUpMember) return "Checking account...";
     if (lookupError) return lookupError;
-    if (results.length > 0) return "Invite ready to add";
+    if (results.length > 0) return "Account found";
     return "Enter a registered teammate email";
-  }, [lookupError, memberEmail, results.length]);
+  }, [isLookingUpMember, lookupError, memberEmail, results.length]);
 
-  const handleLookup = () => {
+  const handleLookup = async () => {
     const trimmed = memberEmail.trim().toLowerCase();
-    if (!trimmed) return;
+    if (!trimmed || isLookingUpMember) return;
     setLookupError(null);
     setResults([]);
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
       setLookupError("Enter a valid email address");
       return;
     }
-    setResults([{ email: trimmed }]);
+
+    try {
+      setIsLookingUpMember(true);
+      const users = await listUsers(trimmed);
+      const match = users.find((entry) => entry.email.toLowerCase() === trimmed);
+      if (!match || match.id === user?.id) {
+        setLookupError("Account doesn't exist");
+        return;
+      }
+      setResults([{ id: match.id, name: match.name, email: match.email }]);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not check account";
+      setLookupError(message);
+    } finally {
+      setIsLookingUpMember(false);
+    }
   };
 
   const handleAddMember = (person: DirectoryEntry) => {
     const email = person.email.trim().toLowerCase();
     if (members.some((m) => m.email.toLowerCase() === email)) return;
-    setMembers((prev) => [...prev, { id: email, email, role: "member" }]);
+    setMembers((prev) => [...prev, { id: person.id, email: person.email, role: "member" }]);
     setMemberEmail("");
     setResults([]);
     setLookupError(null);
@@ -197,8 +219,8 @@ export default function CreateProject() {
                   }}
                 />
               </div>
-              <button className="memberSearchBtn" type="button" onClick={handleLookup}>
-                Add
+              <button className="memberSearchBtn" type="button" onClick={handleLookup} disabled={isLookingUpMember}>
+                {isLookingUpMember ? "Checking..." : "Add"}
               </button>
             </div>
 
@@ -215,7 +237,7 @@ export default function CreateProject() {
                   onClick={() => handleAddMember(person)}
                 >
                   <UserPlus size={14} />
-                  {person.email}
+                  {person.name} · {person.email}
                 </button>
               ))}
             </div>
