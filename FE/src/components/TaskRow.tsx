@@ -6,6 +6,7 @@ export type TaskRowItem = {
   status: TaskRowStatus;
   dueDate: string;
   dueUrgent?: boolean;
+  hasDeadline?: boolean;
   project: string;
   assignee: string;
   workspaceId?: string;
@@ -39,12 +40,7 @@ export default function TaskRow({ task, onClick }: TaskRowProps) {
         </div>
       </div>
       <div
-        className="taskDue font-mono"
-        style={
-          task.dueUrgent && !isCompleted
-            ? { color: "#F45D5D", fontWeight: 800 }
-            : undefined
-        }
+        className={`taskDue font-mono ${task.dueUrgent && !isCompleted ? "taskDueOverdue" : task.hasDeadline && !isCompleted ? "taskDueDeadline" : ""}`}
       >
         {dueLabel}
       </div>

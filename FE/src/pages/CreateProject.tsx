@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { ArrowLeft, UserPlus } from "lucide-react";
+import { ArrowLeft, X, UserPlus } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
@@ -22,30 +22,44 @@ export default function CreateProject() {
   const [memberEmail, setMemberEmail] = useState("");
   const [members, setMembers] = useState<ProjectMember[]>([{ id: "leader", email: "You", role: "leader" }]);
   const [results, setResults] = useState<DirectoryEntry[]>([]);
+  const [lookupError, setLookupError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [shouldGenerateLink, setShouldGenerateLink] = useState(false);
-  const [inviteLink, setInviteLink] = useState<string | null>(null);
-  const [linkError, setLinkError] = useState<string | null>(null);
+  const [shouldGenerateToken, setShouldGenerateToken] = useState(false);
+  const [inviteToken, setInviteToken] = useState<string | null>(null);
+  const [codeError, setCodeError] = useState<string | null>(null);
   const submitLock = useRef(false);
 
   const resultLabel = useMemo(() => {
     if (!memberEmail.trim()) return "";
-    if (results.length > 0) return "Email ready to add";
-    return "Enter an email to invite";
-  }, [memberEmail, results.length]);
+    if (lookupError) return lookupError;
+    if (results.length > 0) return "Invite ready to add";
+    return "Enter a registered teammate email";
+  }, [lookupError, memberEmail, results.length]);
 
   const handleLookup = () => {
     const trimmed = memberEmail.trim().toLowerCase();
     if (!trimmed) return;
+    setLookupError(null);
+    setResults([]);
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+      setLookupError("Enter a valid email address");
+      return;
+    }
     setResults([{ email: trimmed }]);
   };
 
   const handleAddMember = (person: DirectoryEntry) => {
-    if (members.some((m) => m.email === person.email)) return;
-    setMembers((prev) => [...prev, { id: person.email, email: person.email, role: "member" }]);
+    const email = person.email.trim().toLowerCase();
+    if (members.some((m) => m.email.toLowerCase() === email)) return;
+    setMembers((prev) => [...prev, { id: email, email, role: "member" }]);
     setMemberEmail("");
     setResults([]);
+    setLookupError(null);
+  };
+
+  const handleRemoveMember = (memberId: string) => {
+    setMembers((prev) => prev.filter((member) => member.id !== memberId || member.role === "leader"));
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -54,7 +68,7 @@ export default function CreateProject() {
     submitLock.current = true;
     setIsSubmitting(true);
     setError(null);
-    setLinkError(null);
+    setCodeError(null);
 
     try {
       const form = event.currentTarget;
@@ -67,25 +81,26 @@ export default function CreateProject() {
         description: description ? description : undefined,
       });
 
-      const invitees = members.filter((m) => m.role === "member").map((m) => m.email);
+      const invitees = members.filter((m) => m.role === "member").map((m) => m.email.trim());
+      let inviteWarning: string | null = null;
       if (invitees.length > 0) {
         const results = await Promise.allSettled(invitees.map((email) => inviteToWorkspace(workspace.id, email)));
-        const failed = results.some((result) => result.status === "rejected");
-        if (failed) {
-          setError("Some invites failed. Make sure each email is registered.");
+        const failed = results.filter((result) => result.status === "rejected");
+        if (failed.length > 0) {
+          inviteWarning = "Some invites failed. Make sure each email belongs to a registered user.";
         }
       }
 
-      let link: string | null = null;
-      if (shouldGenerateLink) {
+      let code: string | null = null;
+      if (shouldGenerateToken) {
         const { inviteToken } = await createInviteLink(workspace.id);
-        link = `${window.location.origin}/join/${workspace.id}?token=${inviteToken}`;
-        setInviteLink(link);
+        code = inviteToken;
+        setInviteToken(code);
       }
 
       navigate(`/project/${workspace.id}`, {
         replace: true,
-        state: link ? { inviteLink: link } : undefined,
+        state: code || inviteWarning ? { inviteToken: code ?? undefined, inviteWarning: inviteWarning ?? undefined } : undefined,
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to create workspace";
@@ -97,12 +112,12 @@ export default function CreateProject() {
   };
 
   const handleCopyLink = async () => {
-    if (!inviteLink) return;
+    if (!inviteToken) return;
     try {
-      await navigator.clipboard.writeText(inviteLink);
-      setLinkError(null);
+      await navigator.clipboard.writeText(inviteToken);
+      setCodeError(null);
     } catch {
-      setLinkError("Failed to copy link. Please copy it manually.");
+      setCodeError("Failed to copy code. Please copy it manually.");
     }
   };
 
@@ -148,6 +163,16 @@ export default function CreateProject() {
                   <span className="memberAvatar">{member.email[0]}</span>
                   <span>{member.email}</span>
                   {member.role === "leader" ? <span className="leaderBadge">Leader</span> : null}
+                  {member.role !== "leader" ? (
+                    <button
+                      className="removeChipBtn"
+                      type="button"
+                      onClick={() => handleRemoveMember(member.id)}
+                      aria-label={`Remove ${member.email}`}
+                    >
+                      <X size={12} />
+                    </button>
+                  ) : null}
                 </div>
               ))}
             </div>
@@ -159,7 +184,11 @@ export default function CreateProject() {
                   type="email"
                   placeholder="Enter teammate email"
                   value={memberEmail}
-                  onChange={(event) => setMemberEmail(event.target.value)}
+                  onChange={(event) => {
+                    setMemberEmail(event.target.value);
+                    setLookupError(null);
+                    setResults([]);
+                  }}
                   onKeyDown={(event) => {
                     if (event.key === "Enter") {
                       event.preventDefault();
@@ -173,7 +202,9 @@ export default function CreateProject() {
               </button>
             </div>
 
-            {resultLabel ? <p className="resultLabel">{resultLabel}</p> : null}
+            {resultLabel ? (
+              <p className={lookupError ? "resultLabel errorText" : "resultLabel"}>{resultLabel}</p>
+            ) : null}
 
             <div className="memberResults">
               {results.map((person) => (
@@ -191,24 +222,24 @@ export default function CreateProject() {
           </div>
 
           <div className="formField">
-            <span className="formLabel">Invite Link</span>
+            <span className="formLabel">Invite Token</span>
             <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--c-muted-foreground)" }}>
               <input
-                type="radio"
-                checked={shouldGenerateLink}
-                onChange={(event) => setShouldGenerateLink(event.target.checked)}
+                type="checkbox"
+                checked={shouldGenerateToken}
+                onChange={(event) => setShouldGenerateToken(event.target.checked)}
               />
-              Generate a shareable link after creating the project
+              Generate an invite token after creating the project
             </label>
-            {inviteLink ? (
+            {inviteToken ? (
               <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
-                <input className="formInput" value={inviteLink} readOnly />
+                <input className="formInput font-mono" value={inviteToken} readOnly />
                 <button className="ghostBtn" type="button" onClick={handleCopyLink}>
-                  Copy link
+                  Copy token
                 </button>
               </div>
             ) : null}
-            {linkError ? <p className="muted" style={{ margin: "8px 0 0" }}>{linkError}</p> : null}
+            {codeError ? <p className="muted" style={{ margin: "8px 0 0" }}>{codeError}</p> : null}
           </div>
 
           <div className="formActions">
@@ -216,7 +247,7 @@ export default function CreateProject() {
               Cancel
             </button>
             <button className="primaryBtn" type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "Creating..." : shouldGenerateLink ? "Create & generate link" : "Create Project"}
+              {isSubmitting ? "Creating..." : shouldGenerateToken ? "Create & generate token" : "Create Project"}
             </button>
           </div>
           {error ? <p className="muted" style={{ margin: "12px 0 0" }}>{error}</p> : null}

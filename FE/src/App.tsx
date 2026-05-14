@@ -13,7 +13,7 @@ import TaskPage from "./pages/TaskPage";
 import JoinWorkspace from "./pages/JoinWorkspace";
 import { AuthProvider } from "./lib/auth-context";
 import { useAuth } from "./lib/use-auth";
-import { ThemeProvider } from "./hooks/use-theme";
+import { ThemeProvider } from "./hooks/theme-provider";
 
 const queryClient = new QueryClient();
 
@@ -48,6 +48,7 @@ export default function App() {
                 <Route path="/project/:id" element={<ProjectDashboard />} />
                 <Route path="/project/:projectId/tasks" element={<AssignedTasks />} />
                 <Route path="/project/:projectId/tasks/:taskId" element={<TaskPage />} />
+                <Route path="/join" element={<JoinWorkspace />} />
                 <Route path="/join/:workspaceId" element={<JoinWorkspace />} />
                 <Route path="*" element={<NotFound />} />
               </Route>

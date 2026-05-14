@@ -1,5 +1,5 @@
 import { NavLink, useLocation } from "react-router-dom";
-import { Plus } from "lucide-react";
+import { DoorOpen, FolderKanban, Home, ListChecks, LogOut, Plus, Sparkles, Sun, Moon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { listWorkspaces } from "../lib/api/workspaces";
@@ -10,7 +10,6 @@ import { io, type Socket } from "socket.io-client";
 import { readStoredAuth } from "../lib/auth-storage";
 import { pushStoredNotification, readUnreadCount } from "../lib/notifications-storage";
 import { useTheme } from "../hooks/use-theme";
-import { Sun, Moon } from "lucide-react";
 
 type AppLayoutProps = {
   children: ReactNode;
@@ -97,8 +96,14 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
   return (
     <div className="appShell">
+      <a href="#main-content" className="skipLink">
+        Skip to content
+      </a>
       <aside className="sidebar">
         <div className="sidebarHeader">
+          <div className="brandMark" aria-hidden="true">
+            <Sparkles size={18} />
+          </div>
           <div className="brand">Taskora</div>
           <div className="sidebarSpacer" />
           <button
@@ -110,6 +115,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
             {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
           </button>
         </div>
+        <p className="sidebarHint">Plan the work, track ownership, and keep project momentum visible.</p>
 
         <nav className="sidebarNav">
           <NavLink
@@ -117,7 +123,15 @@ export default function AppLayout({ children }: AppLayoutProps) {
             className={({ isActive }) => (isActive ? "navItem active" : "navItem")}
             end
           >
-            My Dashboard
+            <Home className="navItemIcon" />
+            <span className="navLabel">My Dashboard</span>
+          </NavLink>
+          <NavLink
+            to="/join"
+            className={({ isActive }) => (isActive ? "navItem active" : "navItem")}
+          >
+            <DoorOpen className="navItemIcon" />
+            <span className="navLabel">Join Workspace</span>
           </NavLink>
 
           <div className="navSectionHeader">
@@ -137,13 +151,20 @@ export default function AppLayout({ children }: AppLayoutProps) {
                 <span className="navLabel">{workspace.name}</span>
               </NavLink>
             ))}
+            {isLoading ? (
+              <div className="skeletonStack" aria-label="Loading projects">
+                <div className="skeletonLine" />
+                <div className="skeletonLine" />
+              </div>
+            ) : null}
             {!isLoading && workspaces.length === 0 && !error ? (
-              <div className="muted" style={{ padding: "8px 12px", fontSize: 12 }}>
-                No workspaces yet
+              <div className="emptyState" style={{ padding: "18px 12px" }}>
+                <p className="emptyStateTitle">No projects yet</p>
+                <p className="emptyStateText">Create a workspace to start tracking tasks.</p>
               </div>
             ) : null}
             {error ? (
-              <div className="muted" style={{ padding: "8px 12px", fontSize: 12 }}>
+              <div className="emptyState" style={{ padding: "18px 12px" }}>
                 {error}
               </div>
             ) : null}
@@ -156,24 +177,27 @@ export default function AppLayout({ children }: AppLayoutProps) {
                 to={`/project/${activeWorkspaceId}/tasks`}
                 className={({ isActive }) => (isActive ? "navItem active" : "navItem")}
               >
-                Assigned Tasks
+                <ListChecks className="navItemIcon" />
+                <span className="navLabel">Assigned Tasks</span>
               </NavLink>
             ) : (
               <div className="navItem" style={{ opacity: 0.6, cursor: "not-allowed" }}>
-                Assigned Tasks
+                <FolderKanban className="navItemIcon" />
+                <span className="navLabel">Assigned Tasks</span>
               </div>
             )}
           </div>
           <div className="navSection accountSection">
             <div className="navSectionTitle">Account</div>
             <button className="navItem navItemButton" type="button" onClick={handleLogout}>
-              Sign out
+              <LogOut className="navItemIcon" />
+              <span className="navLabel">Sign out</span>
             </button>
           </div>
         </nav>
       </aside>
 
-      <main className="main">
+      <main className="main" id="main-content">
         <div className="pageContainer">{children}</div>
       </main>
     </div>

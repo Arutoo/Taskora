@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Bell, Plus } from "lucide-react";
+import { Bell, Plus, Sparkles } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import CalendarWidget from "../components/CalendarWidget";
@@ -11,7 +11,6 @@ import { useAuth } from "../lib/use-auth";
 import TaskRow from "../components/TaskRow";
 import type { TaskRowItem } from "../components/TaskRow";
 import { formatDueDate } from "../lib/date";
-import { colorFromName } from "../lib/color";
 import {
   clearUnreadCount,
   readStoredNotifications,
@@ -143,14 +142,16 @@ export default function Dashboard() {
       .filter((task) => task.status !== "done")
       .map((task) => {
       const projectName = workspaceNameById.get(task.workspace_id) ?? "Workspace";
-      const assignee = task.assignees?.[0]?.user?.name ?? "Unassigned";
+      const assigneeNames = task.assignees?.map((entry) => entry.user.name).filter(Boolean) ?? [];
+      const assignee = assigneeNames.length > 0 ? assigneeNames.join(", ") : "Unassigned";
       const due = task.deadline ? formatDueDate(task.deadline) : null;
       return {
         id: task.id,
         title: task.title,
         status: task.status,
           dueDate: due ? due.text : "No deadline",
-          dueUrgent: due ? due.urgent : false,
+          dueUrgent: task.is_overdue,
+          hasDeadline: Boolean(task.deadline),
         project: projectName,
         assignee,
         workspaceId: task.workspace_id,
@@ -163,9 +164,10 @@ export default function Dashboard() {
       .filter((task) => Boolean(task.deadline) && task.status !== "done")
       .map((task) => ({
         date: new Date(task.deadline as string).getDate(),
-        color: colorFromName(workspaceNameById.get(task.workspace_id) ?? "Workspace"),
+        color: "#66aaff",
+        overdue: task.is_overdue,
       }));
-  }, [tasks, workspaceNameById]);
+  }, [tasks]);
 
   const stats = useMemo(() => {
     if (!user) return { completed: 0, inProgress: 0, notStarted: 0 };
@@ -195,7 +197,7 @@ export default function Dashboard() {
             clearUnreadCount();
           }}
         >
-          <Bell size={20} color="var(--c-muted-foreground)" />
+          <Bell size={20} />
           {notificationCount > 0 ? (
             <span className="badgeDot" aria-label={`${notificationCount} new notifications`} />
           ) : null}
@@ -268,10 +270,20 @@ export default function Dashboard() {
           >
             <h2 className="sectionTitle">Upcoming Tasks</h2>
             <div className="taskList">
-              {taskRows.length === 0 ? (
-                <p className="muted" style={{ margin: 0, padding: "12px 0" }}>
-                  {taskError ?? "No tasks yet."}
-                </p>
+              {isLoading ? (
+                <div className="skeletonStack" aria-label="Loading tasks">
+                  <div className="skeletonLine" />
+                  <div className="skeletonLine" />
+                  <div className="skeletonLine" />
+                </div>
+              ) : taskRows.length === 0 ? (
+                <div className="emptyState">
+                  <Sparkles size={18} />
+                  <p className="emptyStateTitle">{taskError ? "Task loading issue" : "No urgent tasks"}</p>
+                  <p className={taskError ? "emptyStateText errorText" : "emptyStateText"}>
+                    {taskError ?? "You are clear for now. New assigned work will appear here."}
+                  </p>
+                </div>
               ) : (
                 taskRows.map((task) => (
                   <TaskRow
@@ -300,14 +312,20 @@ export default function Dashboard() {
               </button>
             </div>
             <div className="gridProjects">
-              {workspaces.map((workspace, i) => (
+              {isLoading ? (
+                <>
+                  <div className="skeletonBlock" />
+                  <div className="skeletonBlock" />
+                </>
+              ) : workspaces.map((workspace, i) => (
                 <ProjectCard key={workspace.id} project={workspace} index={i} />
               ))}
             </div>
             {!isLoading && workspaces.length === 0 && !error ? (
-              <p className="muted" style={{ marginTop: 12 }}>
-                No workspaces yet. Create one to get started.
-              </p>
+              <div className="emptyState" style={{ marginTop: 12 }}>
+                <p className="emptyStateTitle">Start with a project</p>
+                <p className="emptyStateText">Create a workspace, invite teammates, and turn loose work into tracked tasks.</p>
+              </div>
             ) : null}
             {error ? (
               <p className="muted" style={{ marginTop: 12 }}>
@@ -328,33 +346,33 @@ export default function Dashboard() {
           >
             <h3 className="sectionTitle">Your Stats</h3>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, textAlign: "center" }}>
-              <div>
-                <p className="font-mono" style={{ fontSize: 24, fontWeight: 800, margin: 0, color: "var(--c-primary)" }}>
+            <div className="statsGrid">
+              <div className="statCard">
+                <p className="font-mono statValue" style={{ color: "var(--c-primary)" }}>
                   {stats.completed}
                 </p>
-                <p className="muted" style={{ fontSize: 12, margin: "6px 0 0" }}>
+                <p className="statLabel">
                   Completed
                 </p>
               </div>
 
-              <div>
-                <p className="font-mono" style={{ fontSize: 24, fontWeight: 800, margin: 0, color: "var(--c-warning)" }}>
+              <div className="statCard">
+                <p className="font-mono statValue" style={{ color: "var(--c-warning)" }}>
                   {stats.inProgress}
                 </p>
-                <p className="muted" style={{ fontSize: 12, margin: "6px 0 0" }}>
+                <p className="statLabel">
                   In Progress
                 </p>
               </div>
 
-              <div>
+              <div className="statCard">
                 <p
-                  className="font-mono"
-                  style={{ fontSize: 24, fontWeight: 800, margin: 0, color: "var(--c-destructive)" }}
+                  className="font-mono statValue"
+                  style={{ color: "var(--c-destructive)" }}
                 >
                   {stats.notStarted}
                 </p>
-                <p className="muted" style={{ fontSize: 12, margin: "6px 0 0" }}>
+                <p className="statLabel">
                   Not Started
                 </p>
               </div>

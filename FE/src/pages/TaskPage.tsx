@@ -1,9 +1,9 @@
 import { useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowLeft, CheckCircle } from "lucide-react";
+import { ArrowLeft, CalendarDays, CheckCircle, Pencil } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { getTask, updateTaskStatus, verifyTask } from "../lib/api/tasks";
-import type { ApiTask, ApiTaskStatus } from "../lib/api/types";
+import { getTask, updateTask, updateTaskStatus, verifyTask } from "../lib/api/tasks";
+import type { ApiTask, ApiTaskPriority, ApiTaskStatus, ApiWorkspace } from "../lib/api/types";
 import { formatDate, formatDueDate } from "../lib/date";
 import { useAuth } from "../lib/use-auth";
 import { getWorkspace } from "../lib/api/workspaces";
@@ -13,6 +13,7 @@ export default function TaskPage() {
   const { projectId, taskId } = useParams<{ projectId: string; taskId: string }>();
   const { isAuthenticated, user } = useAuth();
   const [task, setTask] = useState<ApiTask | null>(null);
+  const [workspace, setWorkspace] = useState<ApiWorkspace | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<ApiTaskStatus | "">("");
@@ -21,6 +22,14 @@ export default function TaskPage() {
   const [isLeader, setIsLeader] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [verifyError, setVerifyError] = useState<string | null>(null);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editTitle, setEditTitle] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editPriority, setEditPriority] = useState<ApiTaskPriority>("medium");
+  const [editDeadline, setEditDeadline] = useState("");
+  const [editAssigneeIds, setEditAssigneeIds] = useState<string[]>([]);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isAuthenticated || !projectId || !taskId) {
@@ -41,6 +50,7 @@ export default function TaskPage() {
         ]);
         if (isActive) {
           setTask(taskData);
+          setWorkspace(workspaceData);
           setStatus(taskData.status);
           const member = workspaceData.members?.find((m) => m.user.id === user?.id);
           setIsLeader(member?.role === "leader");
@@ -80,7 +90,7 @@ export default function TaskPage() {
   }, [task, user]);
 
   const handleStatusUpdate = async () => {
-    if (!projectId || !taskId || !status || isUpdating) return;
+    if (!projectId || !taskId || !status || isUpdating || task?.is_verified) return;
     try {
       setIsUpdating(true);
       setStatusError(null);
@@ -117,21 +127,67 @@ export default function TaskPage() {
     }
   };
 
+  const openEditModal = () => {
+    if (!task) return;
+    setEditTitle(task.title);
+    setEditDescription(task.description ?? "");
+    setEditPriority(task.priority);
+    setEditDeadline(task.deadline ? task.deadline.slice(0, 10) : "");
+    setEditAssigneeIds((task.assignees ?? []).map((assignee) => assignee.user.id));
+    setEditError(null);
+    setIsEditOpen(true);
+  };
+
+  const closeEditModal = () => {
+    if (isSavingEdit) return;
+    setIsEditOpen(false);
+  };
+
+  const toggleEditAssignee = (memberId: string) => {
+    setEditAssigneeIds((current) =>
+      current.includes(memberId) ? current.filter((id) => id !== memberId) : [...current, memberId]
+    );
+  };
+
+  const handleSaveEdit = async () => {
+    if (!projectId || !taskId || !task || isSavingEdit) return;
+    const title = editTitle.trim();
+    if (!title) {
+      setEditError("Task title is required.");
+      return;
+    }
+    if (editAssigneeIds.length === 0) {
+      setEditError("Select at least one assignee.");
+      return;
+    }
+
+    try {
+      setIsSavingEdit(true);
+      setEditError(null);
+      const updated = await updateTask(projectId, taskId, {
+        title,
+        description: editDescription.trim(),
+        priority: editPriority,
+        deadline: editDeadline ? new Date(editDeadline).toISOString() : null,
+        assigneeIds: editAssigneeIds,
+      });
+      setTask(updated);
+      setStatus(updated.status);
+      setIsEditOpen(false);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to update task";
+      setEditError(message);
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
   return (
     <div className="pageStack">
       <button
         type="button"
         onClick={() => navigate(-1)}
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 10,
-          background: "transparent",
-          border: "none",
-          cursor: "pointer",
-          color: "var(--c-muted-foreground)",
-          padding: 0,
-        }}
+        className="linkButton"
       >
         <ArrowLeft size={16} />
         Back
@@ -144,13 +200,19 @@ export default function TaskPage() {
         style={{ paddingTop: 13 }}
       >
         {isLoading ? (
-          <p className="muted" style={{ margin: 0 }}>Loading task...</p>
+          <div className="skeletonStack">
+            <div className="skeletonLine" />
+            <div className="skeletonBlock" />
+          </div>
         ) : error ? (
-          <p className="muted" style={{ margin: 0 }}>{error}</p>
+          <div className="emptyState">
+            <p className="emptyStateTitle">Could not load task</p>
+            <p className="emptyStateText errorText">{error}</p>
+          </div>
         ) : task ? (
-          <div style={{ display: "grid", gap: 4 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div className="taskDetailGrid">
+            <div className="taskHeroRow">
+              <div className="taskStatusLine">
                 <span className={statusClass} />
                 <span style={{ fontSize: 16, color: "var(--c-muted-foreground)" }}>
                   {task.status === "done" ? "Completed" : task.status.replace("_", " ")}
@@ -160,76 +222,93 @@ export default function TaskPage() {
                 ) : null}
               </div>
               {isLeader ? (
-                <button
-                  className="primaryBtn"
-                  type="button"
-                  onClick={handleVerifyTask}
-                  disabled={isVerifying || task.is_verified || task.status !== "done"}
-                  style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
-                >
-                  <CheckCircle size={16} />
-                  {task.is_verified ? "Verified" : isVerifying ? "Verifying..." : "Mark complete"}
-                </button>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 10, justifyContent: "flex-end" }}>
+                  <button
+                    className="ghostBtn"
+                    type="button"
+                    onClick={openEditModal}
+                  >
+                    <Pencil size={16} />
+                    Edit task
+                  </button>
+                  <button
+                    className="primaryBtn"
+                    type="button"
+                    onClick={handleVerifyTask}
+                    disabled={isVerifying || task.is_verified || task.status !== "done"}
+                  >
+                    <CheckCircle size={16} />
+                    {task.is_verified ? "Verified" : isVerifying ? "Verifying..." : "Mark complete"}
+                  </button>
+                </div>
               ) : null}
             </div>
 
             <div>
-              <h1 style={{ margin: 0, fontSize: 30, fontWeight: 900 }}>{task.title}</h1>
+              <h1 className="taskDetailTitle">{task.title}</h1>
               {task.description ? (
                 <p className="muted" style={{ margin: "8px 0 0" }}>{task.description}</p>
               ) : null}
             </div>
 
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "center" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 15, color: "var(--c-muted-foreground)" }}>Status</span>
+            <div className="inlineFormRow">
+              <label className="formField" style={{ margin: 0 }}>
+                <span className="formLabel">Status</span>
                 <select
                   className="formInput"
                   value={status}
                   onChange={(event) => setStatus(event.target.value as ApiTaskStatus)}
-                  disabled={!isAssignee}
+                  disabled={!isAssignee || task.is_verified}
                 >
                   <option value="todo">Not started</option>
                   <option value="in_progress">In progress</option>
                   {isAssignee || task.status === "done" ? <option value="done">Completed</option> : null}
                 </select>
+              </label>
                 <button
                   className="ghostBtn"
                   type="button"
                   onClick={handleStatusUpdate}
-                  disabled={!isAssignee || isUpdating || status === task.status}
+                  disabled={!isAssignee || isUpdating || status === task.status || task.is_verified}
                 >
                   {isUpdating ? "Saving..." : "Save"}
                 </button>
-              </div>
+            </div>
 
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 15, color: "var(--c-muted-foreground)" }}>Assigned to</span>
-                <span style={{ fontSize: 15, fontWeight: 700 }}>
+            <div className="detailMetaGrid">
+              <div className="detailMetaItem">
+                <span className="detailMetaLabel">Assigned to</span>
+                <span className="detailMetaValue">
                   {task.assignees?.[0]?.user?.name ?? "Unassigned"}
                 </span>
               </div>
 
               {task.status === "done" ? (
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 15, fontWeight: 700 }}>Completed</span>
+                <div className="detailMetaItem">
+                  <span className="detailMetaLabel">Progress</span>
+                  <span className="detailMetaValue">Completed</span>
                 </div>
               ) : (
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 15, color: "var(--c-muted-foreground)" }}>Due</span>
-                  <span style={{ fontSize: 15, fontWeight: 700 }}>{dueText}</span>
+                <div className="detailMetaItem">
+                  <span className="detailMetaLabel">Due</span>
+                  <span className="detailMetaValue">{dueText}</span>
                 </div>
               )}
 
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 15, color: "var(--c-muted-foreground)" }}>Created</span>
-                <span style={{ fontSize: 15, fontWeight: 700 }}>{formatDate(task.created_at)}</span>
+              <div className="detailMetaItem">
+                <span className="detailMetaLabel">Created</span>
+                <span className="detailMetaValue">{formatDate(task.created_at)}</span>
               </div>
             </div>
 
             {!isAssignee ? (
               <p className="muted" style={{ margin: 0, fontSize: 12 }}>
                 Only assignees can update status.
+              </p>
+            ) : null}
+            {task.is_verified ? (
+              <p className="muted" style={{ margin: 0, fontSize: 12 }}>
+                This task has been verified and its status is locked.
               </p>
             ) : null}
             {statusError ? (
@@ -269,6 +348,93 @@ export default function TaskPage() {
           <p className="muted" style={{ margin: 0 }}>Task not found.</p>
         )}
       </motion.div>
+      {isLeader && task && isEditOpen ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="modalOverlay"
+          onClick={closeEditModal}
+        >
+          <div className="card cardPad4 modalDialog" onClick={(event) => event.stopPropagation()}>
+            <div className="sectionHeaderRow">
+              <h3 className="sectionTitle">Edit task</h3>
+              <button className="ghostBtn" type="button" onClick={closeEditModal} disabled={isSavingEdit}>
+                Close
+              </button>
+            </div>
+
+            <div style={{ display: "grid", gap: 12 }}>
+              <label className="formField">
+                <span className="formLabel">Title</span>
+                <input
+                  className="formInput"
+                  value={editTitle}
+                  onChange={(event) => setEditTitle(event.target.value)}
+                />
+              </label>
+              <label className="formField">
+                <span className="formLabel">Description</span>
+                <textarea
+                  className="formInput formTextarea"
+                  rows={3}
+                  value={editDescription}
+                  onChange={(event) => setEditDescription(event.target.value)}
+                />
+              </label>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10 }}>
+                <label className="formField">
+                  <span className="formLabel">Priority</span>
+                  <select
+                    className="formInput"
+                    value={editPriority}
+                    onChange={(event) => setEditPriority(event.target.value as ApiTaskPriority)}
+                  >
+                    <option value="high">High</option>
+                    <option value="medium">Medium</option>
+                    <option value="low">Low</option>
+                  </select>
+                </label>
+                <label className="formField">
+                  <span className="formLabel">Deadline</span>
+                  <span className="dateInputShell">
+                    <input
+                      className="formInput"
+                      type="date"
+                      value={editDeadline}
+                      onChange={(event) => setEditDeadline(event.target.value)}
+                    />
+                    <CalendarDays className="dateInputIcon" size={18} />
+                  </span>
+                </label>
+              </div>
+              <div>
+                <div className="formLabel" style={{ marginBottom: 6 }}>Assign to</div>
+                <div className="assigneeGrid">
+                  {(workspace?.members ?? []).map((member) => (
+                    <label key={member.id} className="assigneeOption">
+                      <input
+                        type="checkbox"
+                        checked={editAssigneeIds.includes(member.user.id)}
+                        onChange={() => toggleEditAssignee(member.user.id)}
+                      />
+                      {member.user.name}
+                    </label>
+                  ))}
+                </div>
+              </div>
+              {editError ? <p className="emptyStateText errorText" style={{ margin: 0 }}>{editError}</p> : null}
+              <div className="formActions">
+                <button className="ghostBtn" type="button" onClick={closeEditModal} disabled={isSavingEdit}>
+                  Cancel
+                </button>
+                <button className="primaryBtn" type="button" onClick={handleSaveEdit} disabled={isSavingEdit}>
+                  {isSavingEdit ? "Saving..." : "Save changes"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

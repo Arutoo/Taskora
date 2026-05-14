@@ -10,13 +10,13 @@ export default function NotFound() {
 
   return (
     <div className="centerPage">
-      <div style={{ textAlign: "center" }}>
-        <h1 style={{ fontSize: 48, margin: "0 0 12px", fontWeight: 900 }}>404</h1>
-        <p className="muted" style={{ fontSize: 18, margin: "0 0 16px" }}>
-          Oops! Page not found
+      <div className="card cardPad6" style={{ textAlign: "center", maxWidth: 460 }}>
+        <h1 className="pageTitle">404</h1>
+        <p className="pageSubtitle" style={{ marginInline: "auto", marginBottom: 18 }}>
+          We could not find that page. Head back to your dashboard to continue working.
         </p>
-        <Link to="/" style={{ color: "var(--c-primary)", textDecoration: "underline" }}>
-          Return to Home
+        <Link to="/" className="primaryBtn" style={{ textDecoration: "none" }}>
+          Return home
         </Link>
       </div>
     </div>
