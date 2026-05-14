@@ -22,3 +22,18 @@ export async function userExistsByEmail(email: string): Promise<boolean> {
   const count = await prisma.user.count({ where: { email } });
   return count > 0;
 }
+
+export async function findAllUsers(search?: string) {
+  return prisma.user.findMany({
+    where: search
+      ? {
+          OR: [
+            { name: { contains: search, mode: 'insensitive' } },
+            { email: { contains: search, mode: 'insensitive' } },
+          ],
+        }
+      : undefined,
+    select: { id: true, name: true, email: true, created_at: true },
+    orderBy: { name: 'asc' },
+  });
+}
