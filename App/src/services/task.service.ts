@@ -108,6 +108,8 @@ export async function updateStatus(taskId: string, userId: string, status: TaskS
   const task = await taskRepo.findTaskById(taskId);
   if (!task || task.workspace_id !== workspaceId) throw new AppError('Task not found', 404);
 
+  if (task.is_verified) throw new AppError('Cannot change status of a verified task', 403);
+
   const isAssignee = await taskRepo.isAssignee(taskId, userId);
   if (!isAssignee) throw new AppError('Only assigned members can update task status', 403);
 
@@ -169,4 +171,8 @@ export async function verifyTask(taskId: string, leaderId: string, workspaceId: 
 
   emitToWorkspace(workspaceId, 'task:updated', { taskId, changes: { is_verified: true } });
   return updated;
+}
+
+export async function getCalendar(workspaceId: string) {
+  return taskRepo.findTasksByWorkspaceCalendar(workspaceId);
 }

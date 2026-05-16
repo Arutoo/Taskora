@@ -120,3 +120,12 @@ export async function verifyTask(req: AuthRequest, res: Response, next: NextFunc
     next(err);
   }
 }
+
+export async function getCalendar(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const calendar = await taskService.getCalendar(req.params.id as string);
+    ok(res, calendar);
+  } catch (err) {
+    next(err);
+  }
+}

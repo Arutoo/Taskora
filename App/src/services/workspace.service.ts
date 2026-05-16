@@ -4,6 +4,7 @@ import * as workspaceRepo from '../repositories/workspace.repository';
 import * as userRepo from '../repositories/user.repository';
 import * as notificationService from './notification.service';
 import * as activityLogService from './activityLog.service';
+import * as contributionService from './contribution.service';
 import { NotificationType, ReferenceType } from '@prisma/client';
 
 export async function createWorkspace(
@@ -46,7 +47,9 @@ export async function updateWorkspace(
 export async function archiveWorkspace(workspaceId: string) {
   const ws = await workspaceRepo.findWorkspaceById(workspaceId);
   if (!ws) throw new AppError('Workspace not found', 404);
-  return workspaceRepo.archiveWorkspace(workspaceId);
+  const archived = await workspaceRepo.archiveWorkspace(workspaceId);
+  const contributions = await contributionService.getSummary(workspaceId);
+  return { workspace: archived, final_contributions: contributions };
 }
 
 export async function generateInviteLink(workspaceId: string, invitedBy: string): Promise<string> {
