@@ -119,6 +119,22 @@ export async function flagOverdueTasks(): Promise<string[]> {
   return overdue.map((t) => t.id);
 }
 
+export async function findTasksByWorkspaceCalendar(workspaceId: string) {
+  return prisma.task.findMany({
+    where: { workspace_id: workspaceId },
+    select: {
+      id: true,
+      title: true,
+      start_date: true,
+      deadline: true,
+      status: true,
+      priority: true,
+      is_overdue: true,
+    },
+    orderBy: { deadline: 'asc' },
+  });
+}
+
 export async function isAssignee(taskId: string, userId: string): Promise<boolean> {
   const row = await prisma.taskAssignee.findUnique({
     where: { task_id_user_id: { task_id: taskId, user_id: userId } },
