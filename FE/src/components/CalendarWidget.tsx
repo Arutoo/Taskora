@@ -1,6 +1,7 @@
 type Deadline = {
   date: number;
   color: string;
+  overdue?: boolean;
 };
 
 type CalendarWidgetProps = {
@@ -10,10 +11,11 @@ type CalendarWidgetProps = {
 export default function CalendarWidget({ deadlines }: CalendarWidgetProps) {
   const days = Array.from({ length: 31 }, (_, i) => i + 1);
 
-  const colorForDay = (day: number) => {
+  const deadlineForDay = (day: number) => {
     const hit = deadlines.find((d) => d.date === day);
-    return hit?.color;
+    return hit;
   };
+  const today = new Date().getDate();
 
   return (
     <div className="card cardPad4">
@@ -28,12 +30,18 @@ export default function CalendarWidget({ deadlines }: CalendarWidgetProps) {
 
       <div className="calendarGrid">
         {days.map((d) => {
-          const color = colorForDay(d);
+          const deadline = deadlineForDay(d);
+          const color = deadline?.color;
+          const className = [
+            "calendarCell",
+            d === today ? "today" : "",
+            deadline && d !== today ? (deadline.overdue ? "hasOverdue" : "hasDeadline") : "",
+          ].filter(Boolean).join(" ");
           return (
             <div
               key={d}
-              className="calendarCell"
-              style={color ? { backgroundColor: color + "22", color } : undefined}
+              className={className}
+              style={color && d !== today && !deadline?.overdue ? { backgroundColor: color + "22", color } : undefined}
               title={color ? `Deadline: day ${d}` : `Day ${d}`}
             >
               {d}

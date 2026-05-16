@@ -72,14 +72,16 @@ export default function AssignedTasks() {
   const taskRows = useMemo<TaskRowItem[]>(() => {
     const projectName = workspace?.name ?? "Workspace";
     return tasks.map((task) => {
-      const assignee = task.assignees?.[0]?.user?.name ?? "Unassigned";
+      const assigneeNames = task.assignees?.map((entry) => entry.user.name).filter(Boolean) ?? [];
+      const assignee = assigneeNames.length > 0 ? assigneeNames.join(", ") : "Unassigned";
       const due = task.deadline ? formatDueDate(task.deadline) : null;
       return {
         id: task.id,
         title: task.title,
         status: task.status,
         dueDate: due ? due.text : "No deadline",
-        dueUrgent: due ? due.urgent : false,
+        dueUrgent: task.is_overdue,
+        hasDeadline: Boolean(task.deadline),
         project: projectName,
         assignee,
       };
@@ -95,7 +97,7 @@ export default function AssignedTasks() {
         <p className="pageSubtitle">Tasks for {workspaceName}</p>
       </motion.div>
 
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+      <div className="filterBar">
         {FILTERS.map((f) => {
           const active = filter === f;
           return (
@@ -103,18 +105,7 @@ export default function AssignedTasks() {
               key={f}
               type="button"
               onClick={() => setFilter(f)}
-              style={{
-                padding: "8px 12px",
-                fontSize: 12,
-                borderRadius: 999,
-                cursor: "pointer",
-                border: active ? "1px solid color-mix(in srgb, var(--c-primary) 35%, transparent)" : "1px solid transparent",
-                background: active
-                  ? "color-mix(in srgb, var(--c-primary) 18%, transparent)"
-                  : "var(--c-secondary)",
-                color: active ? "var(--c-foreground)" : "var(--c-muted-foreground)",
-                transition: "background 150ms ease, color 150ms ease, border-color 150ms ease",
-              }}
+              className={active ? "filterChip active" : "filterChip"}
             >
               {f}
             </button>
@@ -125,17 +116,23 @@ export default function AssignedTasks() {
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="card cardPad4">
         <div className="taskList">
           {isLoading ? (
-            <p className="muted" style={{ padding: "28px 0", textAlign: "center", margin: 0, fontSize: 14 }}>
-              Loading workspace...
-            </p>
+            <div className="skeletonStack" aria-label="Loading assigned tasks">
+              <div className="skeletonLine" />
+              <div className="skeletonLine" />
+              <div className="skeletonLine" />
+            </div>
           ) : error ? (
-            <p className="muted" style={{ padding: "28px 0", textAlign: "center", margin: 0, fontSize: 14 }}>
+            <div className="emptyState">
+              <p className="emptyStateTitle">Could not load tasks</p>
+              <p className="emptyStateText errorText">
               {error}
-            </p>
+              </p>
+            </div>
           ) : taskRows.length === 0 ? (
-            <p className="muted" style={{ padding: "28px 0", textAlign: "center", margin: 0, fontSize: 14 }}>
-              No assigned tasks yet.
-            </p>
+            <div className="emptyState">
+              <p className="emptyStateTitle">No tasks match this view</p>
+              <p className="emptyStateText">Assigned tasks will appear here as the workspace fills in.</p>
+            </div>
           ) : (
             taskRows.map((task) => (
               <TaskRow

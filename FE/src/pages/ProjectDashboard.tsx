@@ -2,7 +2,7 @@ import { useLocation, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useEffect, useMemo, useState } from "react";
 import CalendarWidget from "../components/CalendarWidget";
-import { archiveWorkspace, getWorkspace, inviteToWorkspace, removeMember } from "../lib/api/workspaces";
+import { archiveWorkspace, createInviteLink, getWorkspace, inviteToWorkspace, removeMember } from "../lib/api/workspaces";
 import { createTask, deleteTask, listTasks } from "../lib/api/tasks";
 import type { ApiTask, ApiWorkspace } from "../lib/api/types";
 import { useAuth } from "../lib/use-auth";
@@ -10,7 +10,8 @@ import TaskRow from "../components/TaskRow";
 import type { TaskRowItem } from "../components/TaskRow";
 import { formatDueDate } from "../lib/date";
 import { useNavigate } from "react-router-dom";
-import { Plus } from "lucide-react";
+import { CalendarDays, Plus, Sparkles } from "lucide-react";
+import { ApiError } from "../lib/api/client";
 
 export default function ProjectDashboard() {
   const { id } = useParams<{ id: string }>();
@@ -26,10 +27,13 @@ export default function ProjectDashboard() {
   const [taskDescription, setTaskDescription] = useState("");
   const [taskPriority, setTaskPriority] = useState<"high" | "medium" | "low">("medium");
   const [taskDeadline, setTaskDeadline] = useState("");
-  const [assigneeId, setAssigneeId] = useState("");
+  const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
   const [taskError, setTaskError] = useState<string | null>(null);
   const [isCreatingTask, setIsCreatingTask] = useState(false);
-  const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [inviteToken, setInviteToken] = useState<string | null>(null);
+  const [inviteWarning, setInviteWarning] = useState<string | null>(null);
+  const [isGeneratingInviteToken, setIsGeneratingInviteToken] = useState(false);
+  const [inviteTokenError, setInviteTokenError] = useState<string | null>(null);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [memberEmail, setMemberEmail] = useState("");
   const [memberError, setMemberError] = useState<string | null>(null);
@@ -53,8 +57,9 @@ export default function ProjectDashboard() {
         if (isActive) {
           setWorkspace(workspaceData);
           setTasks(taskData);
-          const link = (location.state as { inviteLink?: string } | null)?.inviteLink ?? null;
-          setInviteLink(link);
+          const state = location.state as { inviteToken?: string; inviteWarning?: string } | null;
+          setInviteToken(state?.inviteToken ?? null);
+          setInviteWarning(state?.inviteWarning ?? null);
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : "Failed to load workspace";
@@ -79,7 +84,8 @@ export default function ProjectDashboard() {
       .filter((task) => Boolean(task.deadline) && task.status !== "done")
       .map((task) => ({
         date: new Date(task.deadline as string).getDate(),
-        color: task.priority === "high" ? "#F45D5D" : task.priority === "medium" ? "#F7B441" : "#5AA7FF",
+        color: "#66aaff",
+        overdue: task.is_overdue,
       }));
   }, [tasks]);
 
@@ -104,14 +110,16 @@ export default function ProjectDashboard() {
   const taskRows = useMemo<TaskRowItem[]>(() => {
     const projectName = workspace?.name ?? "Workspace";
     return tasks.map((task) => {
-      const assignee = task.assignees?.[0]?.user?.name ?? "Unassigned";
+      const assigneeNames = task.assignees?.map((entry) => entry.user.name).filter(Boolean) ?? [];
+      const assignee = assigneeNames.length > 0 ? assigneeNames.join(", ") : "Unassigned";
       const due = task.deadline ? formatDueDate(task.deadline) : null;
       return {
         id: task.id,
         title: task.title,
         status: task.status,
         dueDate: due ? due.text : "No deadline",
-        dueUrgent: due ? due.urgent : false,
+        dueUrgent: task.is_overdue,
+        hasDeadline: Boolean(task.deadline),
         project: projectName,
         assignee,
       };
@@ -149,7 +157,9 @@ export default function ProjectDashboard() {
       setWorkspace(workspaceData);
       setMemberEmail("");
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to add member";
+      const message = err instanceof ApiError && err.status === 404
+        ? "Account doesn't exist"
+        : err instanceof Error ? err.message : "Failed to add member";
       setMemberError(message);
     } finally {
       setIsUpdatingMembers(false);
@@ -176,7 +186,9 @@ export default function ProjectDashboard() {
   };
 
   const handleAssigneeChange = (memberId: string) => {
-    setAssigneeId(memberId);
+    setAssigneeIds((current) =>
+      current.includes(memberId) ? current.filter((id) => id !== memberId) : [...current, memberId]
+    );
   };
 
   const handleCreateTask = async () => {
@@ -186,8 +198,8 @@ export default function ProjectDashboard() {
       setTaskError("Task title is required.");
       return;
     }
-    if (!assigneeId) {
-      setTaskError("Select an assignee.");
+    if (assigneeIds.length === 0) {
+      setTaskError("Select at least one assignee.");
       return;
     }
 
@@ -200,7 +212,7 @@ export default function ProjectDashboard() {
         description: taskDescription.trim() ? taskDescription.trim() : undefined,
         priority: taskPriority,
         deadline: taskDeadline ? new Date(taskDeadline).toISOString() : undefined,
-        assigneeIds: [assigneeId],
+        assigneeIds,
       });
 
       const taskData = await listTasks(id);
@@ -208,7 +220,7 @@ export default function ProjectDashboard() {
       setTaskTitle("");
       setTaskDescription("");
       setTaskDeadline("");
-      setAssigneeId("");
+      setAssigneeIds([]);
       setIsTaskModalOpen(false);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to create task";
@@ -245,19 +257,39 @@ export default function ProjectDashboard() {
     }
   };
 
-  const handleCopyInvite = async () => {
-    if (!inviteLink) return;
+  const handleGenerateInviteToken = async () => {
+    if (!id || !isLeader || isGeneratingInviteToken) return;
     try {
-      await navigator.clipboard.writeText(inviteLink);
+      setIsGeneratingInviteToken(true);
+      setInviteTokenError(null);
+      const result = await createInviteLink(id);
+      setInviteToken(result.inviteToken);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to generate invite token";
+      setInviteTokenError(message);
+    } finally {
+      setIsGeneratingInviteToken(false);
+    }
+  };
+
+  const handleCopyInvite = async () => {
+    if (!inviteToken) return;
+    try {
+      await navigator.clipboard.writeText(inviteToken);
+      setInviteTokenError(null);
     } catch {
-      // Ignore clipboard errors.
+      setInviteTokenError("Failed to copy token. Please copy it manually.");
     }
   };
 
   if (isLoading) {
     return (
       <div className="pageStack">
-        <p className="muted">Loading workspace...</p>
+        <div className="skeletonStack">
+          <div className="skeletonBlock" />
+          <div className="skeletonLine" />
+          <div className="skeletonLine" />
+        </div>
       </div>
     );
   }
@@ -265,22 +297,40 @@ export default function ProjectDashboard() {
   if (error || !workspace) {
     return (
       <div className="pageStack">
-        <p className="muted">{error ?? "Workspace not found"}</p>
+        <div className="emptyState">
+          <p className="emptyStateTitle">Workspace unavailable</p>
+          <p className="emptyStateText errorText">{error ?? "Workspace not found"}</p>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="pageStack">
-      {inviteLink ? (
+      {inviteWarning ? (
+        <div className="card" style={{ padding: 16 }}>
+          <p className="emptyStateText errorText" style={{ margin: 0 }}>{inviteWarning}</p>
+        </div>
+      ) : null}
+      {isLeader ? (
         <div className="card" style={{ padding: 16, display: "flex", gap: 10, alignItems: "center" }}>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 12, color: "var(--c-muted-foreground)", marginBottom: 6 }}>Invite link</div>
-            <input className="formInput" value={inviteLink} readOnly />
+            <div style={{ fontSize: 12, color: "var(--c-muted-foreground)", marginBottom: 6 }}>Invite token</div>
+            {inviteToken ? (
+              <input className="formInput font-mono" value={inviteToken} readOnly />
+            ) : (
+              <p className="muted" style={{ margin: 0 }}>Generate a token and share it manually with an invitee.</p>
+            )}
+            {inviteTokenError ? <p className="emptyStateText errorText" style={{ margin: "8px 0 0" }}>{inviteTokenError}</p> : null}
           </div>
-          <button className="ghostBtn" type="button" onClick={handleCopyInvite}>
-            Copy
+          <button className="ghostBtn" type="button" onClick={handleGenerateInviteToken} disabled={isGeneratingInviteToken}>
+            {isGeneratingInviteToken ? "Generating..." : inviteToken ? "New token" : "Generate token"}
           </button>
+          {inviteToken ? (
+            <button className="ghostBtn" type="button" onClick={handleCopyInvite}>
+              Copy
+            </button>
+          ) : null}
         </div>
       ) : null}
       <motion.div
@@ -326,48 +376,29 @@ export default function ProjectDashboard() {
               </div>
             ) : null}
 
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+            <div className="dataTableWrap">
+              <table className="dataTable">
                 <thead>
-                  <tr style={{ color: "var(--c-muted-foreground)", fontSize: 12 }}>
-                    <th style={{ textAlign: "left", padding: "8px 0" }}>Member</th>
-                    <th style={{ textAlign: "center", padding: "8px 0" }}>In Progress</th>
-                    <th style={{ textAlign: "center", padding: "8px 0" }}>Completed</th>
-                    <th style={{ textAlign: "center", padding: "8px 0" }}>Not Started</th>
+                  <tr>
+                    <th>Member</th>
+                    <th className="tableNumber">In Progress</th>
+                    <th className="tableNumber">Completed</th>
+                    <th className="tableNumber">Not Started</th>
                   </tr>
                 </thead>
                 <tbody>
                   {(workspace.members ?? []).map((member) => (
-                    <tr key={member.id} style={{ borderTop: "1px solid color-mix(in srgb, var(--c-border) 45%, transparent)" }}>
-                      <td style={{ padding: "10px 0" }}>
+                    <tr key={member.id}>
+                      <td>
                         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                          <div
-                            style={{
-                              width: 26,
-                              height: 26,
-                              borderRadius: 999,
-                              background: "var(--c-secondary)",
-                              display: "grid",
-                              placeItems: "center",
-                              fontSize: 12,
-                              fontWeight: 800,
-                            }}
-                          >
+                          <div className="avatarSquare">
                             {member.user?.name?.[0] ?? "?"}
                           </div>
 
                           <span>{member.user?.name ?? "Unknown"}</span>
 
                           {member.role === "leader" ? (
-                            <span
-                              style={{
-                                fontSize: 10,
-                                padding: "3px 8px",
-                                borderRadius: 999,
-                                background: "color-mix(in srgb, var(--c-primary) 18%, transparent)",
-                                border: "1px solid color-mix(in srgb, var(--c-primary) 30%, transparent)",
-                              }}
-                            >
+                            <span className="roleBadge">
                               Leader
                             </span>
                           ) : null}
@@ -385,21 +416,23 @@ export default function ProjectDashboard() {
                         </div>
                       </td>
 
-                      <td className="font-mono" style={{ textAlign: "center", color: "var(--c-warning)" }}>
+                      <td className="tableNumber" style={{ color: "var(--c-warning)" }}>
                         {memberStats.get(member.user.id)?.inProgress ?? 0}
                       </td>
-                      <td className="font-mono" style={{ textAlign: "center", color: "var(--c-success)", fontWeight: 800 }}>
+                      <td className="tableNumber" style={{ color: "var(--c-success)", fontWeight: 800 }}>
                         {memberStats.get(member.user.id)?.completed ?? 0}
                       </td>
-                      <td className="font-mono" style={{ textAlign: "center", color: "var(--c-muted-foreground)" }}>
+                      <td className="tableNumber" style={{ color: "var(--c-muted-foreground)" }}>
                         {memberStats.get(member.user.id)?.notStarted ?? 0}
                       </td>
                     </tr>
                   ))}
                   {workspace.members?.length ? null : (
                     <tr>
-                      <td colSpan={4} className="muted" style={{ padding: "12px 0", textAlign: "center" }}>
-                        No members yet
+                      <td colSpan={4}>
+                        <div className="emptyState" style={{ margin: 10 }}>
+                          <p className="emptyStateTitle">No members yet</p>
+                        </div>
                       </td>
                     </tr>
                   )}
@@ -424,9 +457,11 @@ export default function ProjectDashboard() {
             </div>
             <div className="taskList">
               {taskRows.length === 0 ? (
-                <p className="muted" style={{ margin: 0, padding: "12px 0", textAlign: "center" }}>
-                  No tasks yet.
-                </p>
+                <div className="emptyState">
+                  <Sparkles size={18} />
+                  <p className="emptyStateTitle">No tasks yet</p>
+                  <p className="emptyStateText">Create the first task to give the project a clear next step.</p>
+                </div>
               ) : (
                 taskRows.map((task) => (
                   <div key={task.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -475,21 +510,11 @@ export default function ProjectDashboard() {
         <div
           role="dialog"
           aria-modal="true"
-          className="card"
-          style={{
-            position: "fixed",
-            inset: 0,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            background: "rgba(8, 10, 15, 0.6)",
-            zIndex: 40,
-          }}
+          className="modalOverlay"
           onClick={closeTaskModal}
         >
           <div
-            className="card cardPad4"
-            style={{ width: "min(560px, 92vw)" }}
+            className="card cardPad4 modalDialog"
             onClick={(event) => event.stopPropagation()}
           >
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
@@ -528,23 +553,26 @@ export default function ProjectDashboard() {
                 </label>
                 <label className="formField" style={{ margin: 0 }}>
                   <span className="formLabel">Deadline</span>
-                  <input
-                    className="formInput"
-                    type="date"
-                    value={taskDeadline}
-                    onChange={(event) => setTaskDeadline(event.target.value)}
-                  />
+                  <span className="dateInputShell">
+                    <input
+                      className="formInput"
+                      type="date"
+                      value={taskDeadline}
+                      onChange={(event) => setTaskDeadline(event.target.value)}
+                    />
+                    <CalendarDays className="dateInputIcon" size={18} />
+                  </span>
                 </label>
               </div>
               <div>
                 <div className="formLabel" style={{ marginBottom: 6 }}>Assign to</div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                <div className="assigneeGrid">
                   {(workspace.members ?? []).map((member) => (
-                    <label key={member.id} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+                    <label key={member.id} className="assigneeOption">
                       <input
-                        type="radio"
+                        type="checkbox"
                         name="taskAssignee"
-                        checked={assigneeId === member.user.id}
+                        checked={assigneeIds.includes(member.user.id)}
                         onChange={() => handleAssigneeChange(member.user.id)}
                       />
                       {member.user.name}

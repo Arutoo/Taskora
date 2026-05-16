@@ -1,9 +1,9 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { AuthContext } from "./auth-context-base";
 import type { AuthResponse } from "./api/types";
 import { clearStoredAuth, readStoredAuth, writeStoredAuth } from "./auth-storage";
-import { logoutRequest } from "./api/auth";
+import { logoutRequest, refreshRequest } from "./api/auth";
 
 type AuthProviderProps = {
   children: ReactNode;
@@ -17,7 +17,7 @@ type StoredAuth = {
 export function AuthProvider({ children }: AuthProviderProps) {
   const [auth, setAuth] = useState<StoredAuth | null>(() => readStoredAuth());
 
-  const login = (payload: AuthResponse) => {
+  const login = useCallback((payload: AuthResponse) => {
     const nextAuth = {
       accessToken: payload.accessToken,
       refreshToken: payload.refreshToken,
@@ -25,21 +25,49 @@ export function AuthProvider({ children }: AuthProviderProps) {
     };
     writeStoredAuth(nextAuth);
     setAuth(nextAuth);
-  };
+  }, []);
 
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     const refreshToken = auth?.refreshToken ?? null;
     try {
       if (refreshToken) {
         await logoutRequest(refreshToken);
       }
-    } catch {
+    } catch (err) {
+      console.warn("Logout request failed; clearing local session.", err);
     } finally {
       clearStoredAuth();
       setAuth(null);
     }
-  };
+  }, [auth?.refreshToken]);
+
+  useEffect(() => {
+    if (!auth?.refreshToken) return;
+
+    const refreshSession = async () => {
+      try {
+        const refreshed = await refreshRequest(auth.refreshToken);
+        setAuth((current) => {
+          if (!current) return current;
+          const nextAuth = {
+            ...current,
+            accessToken: refreshed.accessToken,
+            refreshToken: refreshed.refreshToken,
+          };
+          writeStoredAuth(nextAuth);
+          return nextAuth;
+        });
+      } catch (err) {
+        console.warn("Session refresh failed; clearing local session.", err);
+        clearStoredAuth();
+        setAuth(null);
+      }
+    };
+
+    const interval = window.setInterval(refreshSession, 14 * 60 * 1000);
+    return () => window.clearInterval(interval);
+  }, [auth?.refreshToken]);
 
   const value = useMemo(
     () => ({
@@ -50,7 +78,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       login,
       logout,
     }),
-    [auth]
+    [auth, login, logout]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

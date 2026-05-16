@@ -1,4 +1,4 @@
-import { apiRequest } from "./client";
+import { ApiError, apiRequest } from "./client";
 import type { ApiWorkspace } from "./types";
 
 type CreateWorkspacePayload = {
@@ -25,15 +25,27 @@ export function createWorkspace(payload: CreateWorkspacePayload) {
   );
 }
 
-export function inviteToWorkspace(workspaceId: string, email: string) {
-  return apiRequest<{ message: string; userId: string }>(
-    `/workspaces/${workspaceId}/invite`,
-    {
-      method: "POST",
-      body: JSON.stringify({ email }),
-    },
-    { auth: true }
-  );
+export async function inviteToWorkspace(workspaceId: string, email: string) {
+  const rawEmail = email.trim();
+  const normalizedEmail = rawEmail.toLowerCase();
+  const sendInvite = (targetEmail: string) =>
+    apiRequest<{ message: string; userId: string }>(
+      `/workspaces/${workspaceId}/invite`,
+      {
+        method: "POST",
+        body: JSON.stringify({ email: targetEmail }),
+      },
+      { auth: true }
+    );
+
+  try {
+    return await sendInvite(normalizedEmail);
+  } catch (err) {
+    if (rawEmail !== normalizedEmail && err instanceof ApiError && err.status === 404) {
+      return sendInvite(rawEmail);
+    }
+    throw err;
+  }
 }
 
 export function createInviteLink(workspaceId: string) {
@@ -56,6 +68,10 @@ export function joinWorkspace(workspaceId: string, token: string) {
     },
     { auth: true }
   );
+}
+
+export function joinWorkspaceWithToken(token: string) {
+  return joinWorkspace("invite", token);
 }
 
 export function archiveWorkspace(workspaceId: string) {
