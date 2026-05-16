@@ -3,7 +3,11 @@ import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import authRoutes from './routes/auth.routes';
+import userRoutes from './routes/user.routes';
 import workspaceRoutes from './routes/workspace.routes';
+import commentRoutes from './routes/comment.routes';
+import notificationRoutes from './routes/notification.routes';
+import jobRoutes from './routes/jobs.routes';
 import { errorHandler } from './middlewares/errorHandler';
 
 const app = express();
@@ -16,7 +20,11 @@ app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
 const v1 = '/api/v1';
 app.use(`${v1}/auth`, authRoutes);
+app.use(`${v1}/users`, userRoutes);
 app.use(`${v1}/workspaces`, workspaceRoutes);
+app.use(`${v1}/tasks/:taskId/comments`, commentRoutes);
+app.use(`${v1}/notifications`, notificationRoutes);
+app.use(`${v1}/jobs`, jobRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({ success: false, data: null, message: 'Route not found' });
