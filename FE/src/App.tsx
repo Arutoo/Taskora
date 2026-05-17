@@ -11,6 +11,7 @@ import ProjectDashboard from "./pages/ProjectDashboard";
 import AssignedTasks from "./pages/AssignedTasks";
 import TaskPage from "./pages/TaskPage";
 import JoinWorkspace from "./pages/JoinWorkspace";
+import WorkspaceActivity from "./pages/WorkspaceActivity";
 import { AuthProvider } from "./lib/auth-context";
 import { useAuth } from "./lib/use-auth";
 import { ThemeProvider } from "./hooks/theme-provider";
@@ -48,6 +49,7 @@ export default function App() {
                 <Route path="/project/:id" element={<ProjectDashboard />} />
                 <Route path="/project/:projectId/tasks" element={<AssignedTasks />} />
                 <Route path="/project/:projectId/tasks/:taskId" element={<TaskPage />} />
+                <Route path="/project/:projectId/activity" element={<WorkspaceActivity />} />
                 <Route path="/join" element={<JoinWorkspace />} />
                 <Route path="/join/:workspaceId" element={<JoinWorkspace />} />
                 <Route path="*" element={<NotFound />} />

@@ -1,28 +1,29 @@
 import { NavLink, useLocation } from "react-router-dom";
-import { DoorOpen, FolderKanban, Home, ListChecks, LogOut, Plus, Sparkles, Sun, Moon } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { Activity, DoorOpen, FolderKanban, Home, ListChecks, LogOut, Plus, Sparkles, Sun, Moon } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { listWorkspaces } from "../lib/api/workspaces";
-import type { ApiWorkspace } from "../lib/api/types";
+import type { ApiNotification, ApiWorkspace } from "../lib/api/types";
 import { colorFromName } from "../lib/color";
 import { useAuth } from "../lib/use-auth";
 import { io, type Socket } from "socket.io-client";
-import { readStoredAuth } from "../lib/auth-storage";
-import { pushStoredNotification, readUnreadCount } from "../lib/notifications-storage";
 import { useTheme } from "../hooks/use-theme";
+import NotificationsBell from "./NotificationsBell";
 
 type AppLayoutProps = {
   children: ReactNode;
 };
 
 export default function AppLayout({ children }: AppLayoutProps) {
-  const { isAuthenticated, logout } = useAuth();
+  const { accessToken, isAuthenticated, logout } = useAuth();
   const location = useLocation();
   const [workspaces, setWorkspaces] = useState<ApiWorkspace[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const { theme, toggleTheme } = useTheme();
+  const workspaceIds = useMemo(() => workspaces.map((workspace) => workspace.id), [workspaces]);
+  const workspaceIdsKey = workspaceIds.join(",");
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -61,32 +62,42 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
   useEffect(() => {
     if (!isAuthenticated) return;
-    const accessToken = readStoredAuth()?.accessToken ?? null;
     if (!accessToken) return;
     const socketUrl = (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:3000";
 
     const socket = io(socketUrl, {
       auth: { token: accessToken },
       transports: ["websocket"],
+      reconnection: true,
+      reconnectionAttempts: Infinity,
     });
 
+    const joinWorkspaceRooms = () => {
+      workspaceIds.forEach((workspaceId) => {
+        socket.emit("workspace:join", workspaceId);
+      });
+    };
+
     socketRef.current = socket;
-    socket.on("notification:new", (data: { id?: string; message?: string; created_at?: string }) => {
+    socket.on("connect", joinWorkspaceRooms);
+    socket.io.on("reconnect", joinWorkspaceRooms);
+    socket.on("notification:new", (data: ApiNotification) => {
       if (!data?.message) return;
-      const list = pushStoredNotification(data);
       window.dispatchEvent(
         new CustomEvent("taskora:notification", {
-          detail: { notification: data, list, unread: readUnreadCount() },
+          detail: { notification: data },
         })
       );
     });
 
     return () => {
+      socket.off("connect", joinWorkspaceRooms);
       socket.off("notification:new");
+      socket.io.off("reconnect", joinWorkspaceRooms);
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [isAuthenticated]);
+  }, [accessToken, isAuthenticated, workspaceIds, workspaceIdsKey]);
 
   const routeMatch = location.pathname.match(/^\/project\/([^/]+)/);
   const activeWorkspaceId = routeMatch?.[1] ?? workspaces[0]?.id;
@@ -106,6 +117,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
           </div>
           <div className="brand">Taskora</div>
           <div className="sidebarSpacer" />
+          <NotificationsBell />
           <button
             onClick={toggleTheme}
             className="themeToggle"
@@ -173,13 +185,22 @@ export default function AppLayout({ children }: AppLayoutProps) {
           <div className="navSectionTitle">Workspace</div>
           <div className="navSection">
             {activeWorkspaceId ? (
-              <NavLink
-                to={`/project/${activeWorkspaceId}/tasks`}
-                className={({ isActive }) => (isActive ? "navItem active" : "navItem")}
-              >
-                <ListChecks className="navItemIcon" />
-                <span className="navLabel">Assigned Tasks</span>
-              </NavLink>
+              <>
+                <NavLink
+                  to={`/project/${activeWorkspaceId}/tasks`}
+                  className={({ isActive }) => (isActive ? "navItem active" : "navItem")}
+                >
+                  <ListChecks className="navItemIcon" />
+                  <span className="navLabel">Assigned Tasks</span>
+                </NavLink>
+                <NavLink
+                  to={`/project/${activeWorkspaceId}/activity`}
+                  className={({ isActive }) => (isActive ? "navItem active" : "navItem")}
+                >
+                  <Activity className="navItemIcon" />
+                  <span className="navLabel">Activity Log</span>
+                </NavLink>
+              </>
             ) : (
               <div className="navItem" style={{ opacity: 0.6, cursor: "not-allowed" }}>
                 <FolderKanban className="navItemIcon" />
