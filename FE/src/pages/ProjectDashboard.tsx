@@ -1,17 +1,53 @@
-import { useLocation, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
+import { CalendarDays, ExternalLink, Link2, Plus, Sparkles, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import CalendarWidget from "../components/CalendarWidget";
-import { archiveWorkspace, createInviteLink, getWorkspace, inviteToWorkspace, removeMember } from "../lib/api/workspaces";
-import { createTask, deleteTask, listTasks } from "../lib/api/tasks";
-import type { ApiTask, ApiWorkspace } from "../lib/api/types";
-import { useAuth } from "../lib/use-auth";
 import TaskRow from "../components/TaskRow";
 import type { TaskRowItem } from "../components/TaskRow";
-import { formatDueDate } from "../lib/date";
-import { useNavigate } from "react-router-dom";
-import { CalendarDays, Plus, Sparkles } from "lucide-react";
+import { archiveWorkspace, createInviteLink, getWorkspace, inviteToWorkspace, removeMember } from "../lib/api/workspaces";
+import { createTask, deleteTask, listTasks } from "../lib/api/tasks";
+import { createShortcut, deleteShortcut, listShortcuts } from "../lib/api/shortcuts";
+import { getWorkspaceCalendar, getWorkspaceContributions } from "../lib/api/workspacefunc";
+import type { ApiCalendarTask, ApiContributionSummary, ApiShortcut, ApiTask, ApiWorkspace } from "../lib/api/types";
 import { ApiError } from "../lib/api/client";
+import { formatDueDate } from "../lib/date";
+import { useAuth } from "../lib/use-auth";
+
+type DashboardDeadline = {
+  date: number;
+  color: string;
+  overdue?: boolean;
+  title: string;
+  kind: "start" | "deadline";
+  endDate?: number;
+};
+
+const contributionColors = [
+  "#67e8c9",
+  "#fbbf6a",
+  "#60a5fa",
+  "#f472b6",
+  "#a7f3d0",
+  "#f87171",
+  "#c084fc",
+  "#fde047",
+];
+
+function polarPoint(cx: number, cy: number, radius: number, angle: number) {
+  const radians = ((angle - 90) * Math.PI) / 180;
+  return {
+    x: cx + radius * Math.cos(radians),
+    y: cy + radius * Math.sin(radians),
+  };
+}
+
+function describeArc(cx: number, cy: number, radius: number, startAngle: number, endAngle: number) {
+  const start = polarPoint(cx, cy, radius, endAngle);
+  const end = polarPoint(cx, cy, radius, startAngle);
+  const largeArcFlag = endAngle - startAngle <= 180 ? "0" : "1";
+  return `M ${start.x} ${start.y} A ${radius} ${radius} 0 ${largeArcFlag} 0 ${end.x} ${end.y}`;
+}
 
 export default function ProjectDashboard() {
   const { id } = useParams<{ id: string }>();
@@ -20,12 +56,16 @@ export default function ProjectDashboard() {
   const { isAuthenticated, user } = useAuth();
   const [workspace, setWorkspace] = useState<ApiWorkspace | null>(null);
   const [tasks, setTasks] = useState<ApiTask[]>([]);
+  const [calendarTasks, setCalendarTasks] = useState<ApiCalendarTask[]>([]);
+  const [contributions, setContributions] = useState<ApiContributionSummary | null>(null);
+  const [shortcuts, setShortcuts] = useState<ApiShortcut[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [taskTitle, setTaskTitle] = useState("");
   const [taskDescription, setTaskDescription] = useState("");
   const [taskPriority, setTaskPriority] = useState<"high" | "medium" | "low">("medium");
+  const [taskStartDate, setTaskStartDate] = useState("");
   const [taskDeadline, setTaskDeadline] = useState("");
   const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
   const [taskError, setTaskError] = useState<string | null>(null);
@@ -39,37 +79,51 @@ export default function ProjectDashboard() {
   const [memberError, setMemberError] = useState<string | null>(null);
   const [isUpdatingMembers, setIsUpdatingMembers] = useState(false);
   const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
+  const [shortcutLabel, setShortcutLabel] = useState("");
+  const [shortcutUrl, setShortcutUrl] = useState("");
+  const [shortcutError, setShortcutError] = useState<string | null>(null);
+  const [isCreatingShortcut, setIsCreatingShortcut] = useState(false);
+  const [deletingShortcutId, setDeletingShortcutId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isAuthenticated || !id) {
       setWorkspace(null);
+      setTasks([]);
+      setCalendarTasks([]);
+      setContributions(null);
+      setShortcuts([]);
       setError(null);
       setIsLoading(false);
       return;
     }
-    let isActive = true;
 
+    let isActive = true;
     const load = async () => {
       try {
         setIsLoading(true);
         setError(null);
-        const [workspaceData, taskData] = await Promise.all([getWorkspace(id), listTasks(id)]);
-        if (isActive) {
-          setWorkspace(workspaceData);
-          setTasks(taskData);
-          const state = location.state as { inviteToken?: string; inviteWarning?: string } | null;
-          setInviteToken(state?.inviteToken ?? null);
-          setInviteWarning(state?.inviteWarning ?? null);
-        }
+        const [workspaceData, taskData, calendarData, contributionData, shortcutData] = await Promise.all([
+          getWorkspace(id),
+          listTasks(id),
+          getWorkspaceCalendar(id),
+          getWorkspaceContributions(id),
+          listShortcuts(id),
+        ]);
+
+        if (!isActive) return;
+        setWorkspace(workspaceData);
+        setTasks(taskData);
+        setCalendarTasks(calendarData);
+        setContributions(contributionData);
+        setShortcuts(shortcutData);
+        const state = location.state as { inviteToken?: string; inviteWarning?: string } | null;
+        setInviteToken(state?.inviteToken ?? null);
+        setInviteWarning(state?.inviteWarning ?? null);
       } catch (err) {
         const message = err instanceof Error ? err.message : "Failed to load workspace";
-        if (isActive) {
-          setError(message);
-        }
+        if (isActive) setError(message);
       } finally {
-        if (isActive) {
-          setIsLoading(false);
-        }
+        if (isActive) setIsLoading(false);
       }
     };
 
@@ -79,39 +133,40 @@ export default function ProjectDashboard() {
     };
   }, [id, isAuthenticated, location.state]);
 
-  const deadlines = useMemo(() => {
-    return tasks
-      .filter((task) => Boolean(task.deadline) && task.status !== "done")
-      .map((task) => ({
-        date: new Date(task.deadline as string).getDate(),
-        color: "#66aaff",
-        overdue: task.is_overdue,
-      }));
-  }, [tasks]);
+  const currentMember = workspace?.members?.find((member) => member.user.id === user?.id);
+  const isLeader = currentMember?.role === "leader";
 
-  const memberStats = useMemo(() => {
-    const stats = new Map<string, { inProgress: number; completed: number; notStarted: number }>();
-    (workspace?.members ?? []).forEach((member) => {
-      stats.set(member.user.id, { inProgress: 0, completed: 0, notStarted: 0 });
+  const deadlines = useMemo<DashboardDeadline[]>(() => {
+    return calendarTasks.flatMap((task) => {
+      const entries: DashboardDeadline[] = [];
+      if (task.start_date) {
+        entries.push({
+          date: new Date(task.start_date).getDate(),
+          color: "var(--c-accent-2)",
+          title: task.title,
+          kind: "start",
+          endDate: task.deadline ? new Date(task.deadline).getDate() : undefined,
+        });
+      }
+
+      if (task.deadline && task.status !== "done") {
+        entries.push({
+          date: new Date(task.deadline).getDate(),
+          color: "#66aaff",
+          overdue: task.is_overdue,
+          title: task.title,
+          kind: "deadline",
+        });
+      }
+
+      return entries.filter((entry) => Number.isFinite(entry.date));
     });
-
-    tasks.forEach((task) => {
-      const statusKey =
-        task.status === "in_progress" ? "inProgress" : task.status === "done" ? "completed" : "notStarted";
-      (task.assignees ?? []).forEach((assignee) => {
-        const record = stats.get(assignee.user.id);
-        if (record) record[statusKey] += 1;
-      });
-    });
-
-    return stats;
-  }, [tasks, workspace?.members]);
+  }, [calendarTasks]);
 
   const taskRows = useMemo<TaskRowItem[]>(() => {
     const projectName = workspace?.name ?? "Workspace";
     return tasks.map((task) => {
       const assigneeNames = task.assignees?.map((entry) => entry.user.name).filter(Boolean) ?? [];
-      const assignee = assigneeNames.length > 0 ? assigneeNames.join(", ") : "Unassigned";
       const due = task.deadline ? formatDueDate(task.deadline) : null;
       return {
         id: task.id,
@@ -121,13 +176,65 @@ export default function ProjectDashboard() {
         dueUrgent: task.is_overdue,
         hasDeadline: Boolean(task.deadline),
         project: projectName,
-        assignee,
+        assignee: assigneeNames.length > 0 ? assigneeNames.join(", ") : "Unassigned",
+        isVerified: task.is_verified,
       };
     });
   }, [tasks, workspace?.name]);
 
-  const currentMember = workspace?.members?.find((member) => member.user.id === user?.id);
-  const isLeader = currentMember?.role === "leader";
+  const contributionRows = useMemo(() => {
+    return (contributions?.members ?? []).map((member, index) => ({
+      ...member,
+      color: contributionColors[index % contributionColors.length],
+    }));
+  }, [contributions?.members]);
+
+  const donutSegments = useMemo(() => {
+    if (!contributions || contributions.total_verified <= 0) return [];
+    let cursor = 0;
+    const gap = contributionRows.filter((member) => member.verified_tasks > 0).length > 1 ? 4 : 0;
+    return contributionRows
+      .filter((member) => member.verified_tasks > 0)
+      .map((member) => {
+        const sweep = (member.verified_tasks / contributions.total_verified) * 360;
+        const start = cursor;
+        const end = cursor + sweep;
+        cursor = end;
+        return {
+          ...member,
+          isFullCircle: sweep >= 359.5,
+          d: describeArc(60, 60, 44, start + gap / 2, end - gap / 2),
+        };
+      });
+  }, [contributionRows, contributions]);
+
+  const refreshWorkspaceMembers = async () => {
+    if (!id) return;
+    const [workspaceData, contributionData] = await Promise.all([
+      getWorkspace(id),
+      getWorkspaceContributions(id),
+    ]);
+    setWorkspace(workspaceData);
+    setContributions(contributionData);
+  };
+
+  const refreshTaskSurfaces = async () => {
+    if (!id) return;
+    const [taskData, calendarData, contributionData] = await Promise.all([
+      listTasks(id),
+      getWorkspaceCalendar(id),
+      getWorkspaceContributions(id),
+    ]);
+    setTasks(taskData);
+    setCalendarTasks(calendarData);
+    setContributions(contributionData);
+  };
+
+  const refreshShortcuts = async () => {
+    if (!id) return;
+    const shortcutData = await listShortcuts(id);
+    setShortcuts(shortcutData);
+  };
 
   const handleDeleteProject = async () => {
     if (!id || !isLeader || isDeleting) return;
@@ -153,8 +260,7 @@ export default function ProjectDashboard() {
       setIsUpdatingMembers(true);
       setMemberError(null);
       await inviteToWorkspace(id, email);
-      const workspaceData = await getWorkspace(id);
-      setWorkspace(workspaceData);
+      await refreshWorkspaceMembers();
       setMemberEmail("");
     } catch (err) {
       const message = err instanceof ApiError && err.status === 404
@@ -167,16 +273,14 @@ export default function ProjectDashboard() {
   };
 
   const handleRemoveMember = async (memberId: string) => {
-    if (!id || !isLeader || isUpdatingMembers) return;
-    if (memberId === user?.id) return;
+    if (!id || !isLeader || isUpdatingMembers || memberId === user?.id) return;
     const confirmed = window.confirm("Remove this member from the project?");
     if (!confirmed) return;
     try {
       setIsUpdatingMembers(true);
       setMemberError(null);
       await removeMember(id, memberId);
-      const workspaceData = await getWorkspace(id);
-      setWorkspace(workspaceData);
+      await refreshWorkspaceMembers();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to remove member";
       setMemberError(message);
@@ -187,7 +291,7 @@ export default function ProjectDashboard() {
 
   const handleAssigneeChange = (memberId: string) => {
     setAssigneeIds((current) =>
-      current.includes(memberId) ? current.filter((id) => id !== memberId) : [...current, memberId]
+      current.includes(memberId) ? current.filter((entry) => entry !== memberId) : [...current, memberId]
     );
   };
 
@@ -206,19 +310,18 @@ export default function ProjectDashboard() {
     try {
       setIsCreatingTask(true);
       setTaskError(null);
-
       await createTask(id, {
         title,
         description: taskDescription.trim() ? taskDescription.trim() : undefined,
         priority: taskPriority,
+        start_date: taskStartDate ? new Date(taskStartDate).toISOString() : undefined,
         deadline: taskDeadline ? new Date(taskDeadline).toISOString() : undefined,
         assigneeIds,
       });
-
-      const taskData = await listTasks(id);
-      setTasks(taskData);
+      await refreshTaskSurfaces();
       setTaskTitle("");
       setTaskDescription("");
+      setTaskStartDate("");
       setTaskDeadline("");
       setAssigneeIds([]);
       setIsTaskModalOpen(false);
@@ -230,16 +333,6 @@ export default function ProjectDashboard() {
     }
   };
 
-  const openTaskModal = () => {
-    setTaskError(null);
-    setIsTaskModalOpen(true);
-  };
-
-  const closeTaskModal = () => {
-    if (isCreatingTask) return;
-    setIsTaskModalOpen(false);
-  };
-
   const handleDeleteTask = async (taskId: string) => {
     if (!id || !isLeader || deletingTaskId) return;
     const confirmed = window.confirm("Delete this task? This cannot be undone.");
@@ -247,13 +340,64 @@ export default function ProjectDashboard() {
     try {
       setDeletingTaskId(taskId);
       await deleteTask(id, taskId);
-      const taskData = await listTasks(id);
-      setTasks(taskData);
+      await refreshTaskSurfaces();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to delete task";
       setTaskError(message);
     } finally {
       setDeletingTaskId(null);
+    }
+  };
+
+  const handleCreateShortcut = async () => {
+    if (!id || !isLeader || isCreatingShortcut) return;
+    const label = shortcutLabel.trim();
+    const url = shortcutUrl.trim();
+    if (!label) {
+      setShortcutError("Shortcut label is required.");
+      return;
+    }
+    if (!url) {
+      setShortcutError("Shortcut URL is required.");
+      return;
+    }
+
+    try {
+      new URL(url);
+    } catch {
+      setShortcutError("Enter a full URL, including https://");
+      return;
+    }
+
+    try {
+      setIsCreatingShortcut(true);
+      setShortcutError(null);
+      await createShortcut(id, { label, url });
+      await refreshShortcuts();
+      setShortcutLabel("");
+      setShortcutUrl("");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to add shortcut";
+      setShortcutError(message);
+    } finally {
+      setIsCreatingShortcut(false);
+    }
+  };
+
+  const handleDeleteShortcut = async (shortcutId: string) => {
+    if (!id || deletingShortcutId) return;
+    const confirmed = window.confirm("Delete this shortcut?");
+    if (!confirmed) return;
+    try {
+      setDeletingShortcutId(shortcutId);
+      setShortcutError(null);
+      await deleteShortcut(id, shortcutId);
+      await refreshShortcuts();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to delete shortcut";
+      setShortcutError(message);
+    } finally {
+      setDeletingShortcutId(null);
     }
   };
 
@@ -280,6 +424,16 @@ export default function ProjectDashboard() {
     } catch {
       setInviteTokenError("Failed to copy token. Please copy it manually.");
     }
+  };
+
+  const openTaskModal = () => {
+    setTaskError(null);
+    setIsTaskModalOpen(true);
+  };
+
+  const closeTaskModal = () => {
+    if (isCreatingTask) return;
+    setIsTaskModalOpen(false);
   };
 
   if (isLoading) {
@@ -312,6 +466,7 @@ export default function ProjectDashboard() {
           <p className="emptyStateText errorText" style={{ margin: 0 }}>{inviteWarning}</p>
         </div>
       ) : null}
+
       {isLeader ? (
         <div className="card" style={{ padding: 16, display: "flex", gap: 10, alignItems: "center" }}>
           <div style={{ flex: 1 }}>
@@ -333,6 +488,7 @@ export default function ProjectDashboard() {
           ) : null}
         </div>
       ) : null}
+
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -349,64 +505,98 @@ export default function ProjectDashboard() {
         ) : null}
       </motion.div>
 
-      <div className="grid3">
-        <div className="col gap6">
-          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="card cardPad4">
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="card cardPad4">
+        <div className="sectionHeaderRow">
+          <div>
             <h2 className="sectionTitle">Contribution</h2>
-            {isLeader ? (
-              <div style={{ display: "grid", gap: 8, marginBottom: 16 }}>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <input
-                    className="formInput"
-                    placeholder="Add member by email"
-                    value={memberEmail}
-                    onChange={(event) => setMemberEmail(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault();
-                        handleAddMember();
-                      }
-                    }}
-                  />
-                  <button className="ghostBtn" type="button" onClick={handleAddMember} disabled={isUpdatingMembers}>
-                    {isUpdatingMembers ? "Adding..." : "Add"}
-                  </button>
-                </div>
-                {memberError ? <p className="muted" style={{ margin: 0 }}>{memberError}</p> : null}
-              </div>
-            ) : null}
+            <p className="muted" style={{ margin: "4px 0 0", fontSize: 13 }}>
+              Verified task count and workspace share.
+            </p>
+          </div>
+          <div className="metricPill">
+            <span className="font-mono">{contributions?.total_verified ?? 0}</span>
+            verified
+          </div>
+        </div>
 
-            <div className="dataTableWrap">
-              <table className="dataTable">
-                <thead>
-                  <tr>
-                    <th>Member</th>
-                    <th className="tableNumber">In Progress</th>
-                    <th className="tableNumber">Completed</th>
-                    <th className="tableNumber">Not Started</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(workspace.members ?? []).map((member) => (
-                    <tr key={member.id}>
+        {isLeader ? (
+          <div style={{ display: "grid", gap: 8, marginBottom: 16 }}>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input
+                className="formInput"
+                placeholder="Add member by email"
+                value={memberEmail}
+                onChange={(event) => setMemberEmail(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    handleAddMember();
+                  }
+                }}
+              />
+              <button className="ghostBtn" type="button" onClick={handleAddMember} disabled={isUpdatingMembers}>
+                {isUpdatingMembers ? "Adding..." : "Add"}
+              </button>
+            </div>
+            {memberError ? <p className="muted" style={{ margin: 0 }}>{memberError}</p> : null}
+          </div>
+        ) : null}
+
+        <div className="contributionPanel">
+          <div className="contributionDonutWrap">
+            <svg className="contributionDonut" viewBox="0 0 120 120" role="img" aria-label="Verified task share by member">
+              <circle className="donutTrack" cx="60" cy="60" r="44" />
+              {donutSegments.map((segment) =>
+                segment.isFullCircle ? (
+                  <circle
+                    key={segment.user_id}
+                    className="donutSegment"
+                    cx="60"
+                    cy="60"
+                    r="44"
+                    style={{ stroke: segment.color }}
+                  />
+                ) : (
+                  <path
+                    key={segment.user_id}
+                    className="donutSegment"
+                    d={segment.d}
+                    style={{ stroke: segment.color }}
+                  />
+                )
+              )}
+            </svg>
+            <div className="donutCenter">
+              <span className="font-mono">{contributions?.total_verified ?? 0}</span>
+              <small>verified</small>
+            </div>
+          </div>
+
+          <div className="dataTableWrap">
+            <table className="dataTable contributionTable">
+              <thead>
+                <tr>
+                  <th>Member</th>
+                  <th className="tableNumber">Verified Tasks</th>
+                  <th className="tableNumber">Share</th>
+                </tr>
+              </thead>
+              <tbody>
+                {contributionRows.map((member) => {
+                  const workspaceMember = workspace.members?.find((entry) => entry.user.id === member.user_id);
+                  return (
+                    <tr key={member.user_id}>
                       <td>
                         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                          <div className="avatarSquare">
-                            {member.user?.name?.[0] ?? "?"}
-                          </div>
-
-                          <span>{member.user?.name ?? "Unknown"}</span>
-
-                          {member.role === "leader" ? (
-                            <span className="roleBadge">
-                              Leader
-                            </span>
-                          ) : null}
-                          {isLeader && member.role !== "leader" ? (
+                          <span className="contributionColorDot" style={{ backgroundColor: member.color }} />
+                          <div className="avatarSquare">{member.name?.[0] ?? "?"}</div>
+                          <span>{member.name}</span>
+                          {workspaceMember?.role === "leader" ? <span className="roleBadge">Leader</span> : null}
+                          {isLeader && workspaceMember?.role !== "leader" ? (
                             <button
                               className="ghostBtn"
                               type="button"
-                              onClick={() => handleRemoveMember(member.user.id)}
+                              onClick={() => handleRemoveMember(member.user_id)}
                               disabled={isUpdatingMembers}
                               style={{ marginLeft: "auto" }}
                             >
@@ -415,32 +605,32 @@ export default function ProjectDashboard() {
                           ) : null}
                         </div>
                       </td>
-
-                      <td className="tableNumber" style={{ color: "var(--c-warning)" }}>
-                        {memberStats.get(member.user.id)?.inProgress ?? 0}
-                      </td>
                       <td className="tableNumber" style={{ color: "var(--c-success)", fontWeight: 800 }}>
-                        {memberStats.get(member.user.id)?.completed ?? 0}
+                        {member.verified_tasks}
                       </td>
                       <td className="tableNumber" style={{ color: "var(--c-muted-foreground)" }}>
-                        {memberStats.get(member.user.id)?.notStarted ?? 0}
+                        {member.percentage.toFixed(2)}%
                       </td>
                     </tr>
-                  ))}
-                  {workspace.members?.length ? null : (
-                    <tr>
-                      <td colSpan={4}>
-                        <div className="emptyState" style={{ margin: 10 }}>
-                          <p className="emptyStateTitle">No members yet</p>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </motion.div>
+                  );
+                })}
+                {contributionRows.length ? null : (
+                  <tr>
+                    <td colSpan={3}>
+                      <div className="emptyState" style={{ margin: 10 }}>
+                        <p className="emptyStateTitle">No members yet</p>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </motion.div>
 
+      <div className="grid3">
+        <div className="col gap6">
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
@@ -466,10 +656,7 @@ export default function ProjectDashboard() {
                 taskRows.map((task) => (
                   <div key={task.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <div style={{ flex: 1 }}>
-                      <TaskRow
-                        task={task}
-                        onClick={() => navigate(`/project/${id}/tasks/${task.id}`)}
-                      />
+                      <TaskRow task={task} onClick={() => navigate(`/project/${id}/tasks/${task.id}`)} />
                     </div>
                     {isLeader ? (
                       <button
@@ -499,24 +686,102 @@ export default function ProjectDashboard() {
           >
             <h3 className="sectionTitle">Description</h3>
             {workspace.description ? (
-              <p style={{ margin: 0 }}>{workspace.description}</p>
+              <p className="breakText" style={{ margin: 0 }}>{workspace.description}</p>
             ) : (
               <p className="muted" style={{ margin: 0 }}>No description yet.</p>
             )}
           </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.25 }}
+            className="card cardPad4"
+          >
+            <div className="sectionHeaderRow">
+              <div>
+                <h3 className="sectionTitle">Resource Shortcuts</h3>
+                <p className="muted" style={{ margin: "4px 0 0", fontSize: 13 }}>
+                  Shared links for this workspace.
+                </p>
+              </div>
+              <Link2 size={18} className="muted" />
+            </div>
+
+            {isLeader ? (
+              <>
+                <div className="shortcutForm">
+                  <input
+                    className="formInput"
+                    placeholder="Label"
+                    value={shortcutLabel}
+                    onChange={(event) => setShortcutLabel(event.target.value)}
+                  />
+                  <input
+                    className="formInput"
+                    placeholder="https://example.com"
+                    value={shortcutUrl}
+                    onChange={(event) => setShortcutUrl(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        handleCreateShortcut();
+                      }
+                    }}
+                  />
+                  <button className="ghostBtn" type="button" onClick={handleCreateShortcut} disabled={isCreatingShortcut}>
+                    {isCreatingShortcut ? "Adding..." : "Add"}
+                  </button>
+                </div>
+                {shortcutError ? <p className="emptyStateText errorText" style={{ margin: "10px 0 0" }}>{shortcutError}</p> : null}
+              </>
+            ) : null}
+
+            <div className="shortcutList">
+              {shortcuts.length === 0 ? (
+                <div className="emptyState shortcutEmpty">
+                  <Link2 size={18} />
+                  <p className="emptyStateTitle">No shortcuts yet</p>
+                  <p className="emptyStateText">Add docs, boards, repos, or references your team uses often.</p>
+                </div>
+              ) : (
+                shortcuts.map((shortcut) => {
+                  const canDelete = isLeader || shortcut.added_by === user?.id;
+                  return (
+                    <div className="shortcutItem" key={shortcut.id}>
+                      <a className="shortcutLink" href={shortcut.url} target="_blank" rel="noreferrer">
+                        <span className="shortcutIcon" aria-hidden="true">
+                          <ExternalLink size={15} />
+                        </span>
+                        <span>
+                          <span className="shortcutLabel">{shortcut.label}</span>
+                          <span className="shortcutUrl">{shortcut.url}</span>
+                        </span>
+                      </a>
+                      {canDelete ? (
+                        <button
+                          className="ghostBtn iconOnlyBtn"
+                          type="button"
+                          title="Delete shortcut"
+                          aria-label={`Delete shortcut ${shortcut.label}`}
+                          onClick={() => handleDeleteShortcut(shortcut.id)}
+                          disabled={deletingShortcutId === shortcut.id}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      ) : null}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </motion.div>
         </div>
       </div>
+
       {isLeader && isTaskModalOpen ? (
-        <div
-          role="dialog"
-          aria-modal="true"
-          className="modalOverlay"
-          onClick={closeTaskModal}
-        >
-          <div
-            className="card cardPad4 modalDialog"
-            onClick={(event) => event.stopPropagation()}
-          >
+        <div role="dialog" aria-modal="true" className="modalOverlay" onClick={closeTaskModal}>
+          <div className="card cardPad4 modalDialog" onClick={(event) => event.stopPropagation()}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
               <h3 className="sectionTitle" style={{ margin: 0 }}>New task</h3>
               <button className="ghostBtn" type="button" onClick={closeTaskModal}>
@@ -550,6 +815,18 @@ export default function ProjectDashboard() {
                     <option value="medium">Medium</option>
                     <option value="low">Low</option>
                   </select>
+                </label>
+                <label className="formField" style={{ margin: 0 }}>
+                  <span className="formLabel">Start date</span>
+                  <span className="dateInputShell">
+                    <input
+                      className="formInput"
+                      type="date"
+                      value={taskStartDate}
+                      onChange={(event) => setTaskStartDate(event.target.value)}
+                    />
+                    <CalendarDays className="dateInputIcon" size={18} />
+                  </span>
                 </label>
                 <label className="formField" style={{ margin: 0 }}>
                   <span className="formLabel">Deadline</span>
