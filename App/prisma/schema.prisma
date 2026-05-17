@@ -58,11 +58,13 @@ model User {
 
   refresh_tokens    RefreshToken[]
   workspace_members WorkspaceMember[]
-  workspaces_owned  Workspace[]       @relation("WorkspaceCreator")
-  tasks_created     Task[]            @relation("TaskCreator")
+  workspaces_owned  Workspace[]        @relation("WorkspaceCreator")
+  tasks_created     Task[]             @relation("TaskCreator")
   task_assignees    TaskAssignee[]
+  comments          Comment[]
   notifications     Notification[]
   activity_logs     ActivityLog[]
+  shortcuts         ResourceShortcut[]
 }
 
 model RefreshToken {
@@ -84,10 +86,11 @@ model Workspace {
   created_by  String   @db.Uuid
   created_at  DateTime @default(now())
 
-  creator       User              @relation("WorkspaceCreator", fields: [created_by], references: [id])
+  creator       User               @relation("WorkspaceCreator", fields: [created_by], references: [id])
   members       WorkspaceMember[]
   tasks         Task[]
   activity_logs ActivityLog[]
+  shortcuts     ResourceShortcut[]
 }
 
 model WorkspaceMember {
@@ -121,6 +124,7 @@ model Task {
   workspace Workspace      @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
   creator   User           @relation("TaskCreator", fields: [created_by], references: [id])
   assignees TaskAssignee[]
+  comments  Comment[]
 }
 
 model TaskAssignee {
@@ -132,6 +136,20 @@ model TaskAssignee {
   user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@unique([task_id, user_id])
+}
+
+model Comment {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  task_id    String   @db.Uuid
+  user_id    String   @db.Uuid
+  parent_id  String?  @db.Uuid
+  content    String
+  created_at DateTime @default(now())
+
+  task    Task      @relation(fields: [task_id], references: [id], onDelete: Cascade)
+  user    User      @relation(fields: [user_id], references: [id])
+  parent  Comment?  @relation("CommentReplies", fields: [parent_id], references: [id])
+  replies Comment[] @relation("CommentReplies")
 }
 
 model Notification {
@@ -158,4 +176,16 @@ model ActivityLog {
 
   workspace Workspace @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
   user      User      @relation(fields: [user_id], references: [id])
+}
+
+model ResourceShortcut {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspace_id String   @db.Uuid
+  added_by     String   @db.Uuid
+  label        String   @db.VarChar(100)
+  url          String
+  created_at   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [added_by], references: [id])
 }
