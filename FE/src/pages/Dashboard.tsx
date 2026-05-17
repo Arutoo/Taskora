@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Bell, Plus, Sparkles } from "lucide-react";
+import { Plus, Sparkles } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import CalendarWidget from "../components/CalendarWidget";
@@ -11,11 +11,6 @@ import { useAuth } from "../lib/use-auth";
 import TaskRow from "../components/TaskRow";
 import type { TaskRowItem } from "../components/TaskRow";
 import { formatDueDate } from "../lib/date";
-import {
-  clearUnreadCount,
-  readStoredNotifications,
-  readUnreadCount,
-} from "../lib/notifications-storage";
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -25,12 +20,6 @@ export default function Dashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [taskError, setTaskError] = useState<string | null>(null);
-  const [notificationCount, setNotificationCount] = useState(readUnreadCount());
-  const [showNotifications, setShowNotifications] = useState(false);
-  const [notifications, setNotifications] = useState(
-    readStoredNotifications()
-  );
-  const [notificationError, setNotificationError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -86,41 +75,6 @@ export default function Dashboard() {
       isActive = false;
     };
   }, [isAuthenticated, user?.id]);
-
-  useEffect(() => {
-    const handleNotification = (event: Event) => {
-      const custom = event as CustomEvent<{ list?: typeof notifications; unread?: number }>;
-      if (custom.detail?.list) {
-        setNotifications(custom.detail.list);
-      } else {
-        setNotifications(readStoredNotifications());
-      }
-      if (typeof custom.detail?.unread === "number") {
-        setNotificationCount(custom.detail.unread);
-      } else {
-        setNotificationCount(readUnreadCount());
-      }
-      setNotificationError(null);
-    };
-
-    window.addEventListener("taskora:notification", handleNotification);
-    return () => {
-      window.removeEventListener("taskora:notification", handleNotification);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!showNotifications) return;
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setShowNotifications(false);
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [showNotifications]);
 
   const workspaceNameById = useMemo(() => {
     const map = new Map<string, string>();
@@ -186,79 +140,7 @@ export default function Dashboard() {
           <h1 className="pageTitle">My Dashboard</h1>
           <p className="pageSubtitle">Welcome back! Here's what needs your attention.</p>
         </div>
-
-        <button
-          className="iconBtn"
-          type="button"
-          aria-label="Notifications"
-          onClick={() => {
-            setShowNotifications((prev) => !prev);
-            setNotificationCount(0);
-            clearUnreadCount();
-          }}
-        >
-          <Bell size={20} />
-          {notificationCount > 0 ? (
-            <span className="badgeDot" aria-label={`${notificationCount} new notifications`} />
-          ) : null}
-        </button>
       </motion.div>
-      {showNotifications ? (
-        <div
-          className="notificationOverlay"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Notifications"
-          onClick={() => setShowNotifications(false)}
-        >
-          <motion.div
-            initial={{ opacity: 0, y: -8, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            className="notificationModal"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="notificationHeader">
-              <div>
-                <p className="notificationKicker">Notifications</p>
-                <p className="notificationTitle">Activity feed</p>
-              </div>
-              <button
-                className="ghostBtn"
-                type="button"
-                onClick={() => setShowNotifications(false)}
-              >
-                Close
-              </button>
-            </div>
-
-            {notificationError ? (
-              <div className="notificationEmpty">
-                <p className="muted" style={{ margin: 0 }}>{notificationError}</p>
-              </div>
-            ) : notifications.length === 0 ? (
-              <div className="notificationEmpty">
-                <p className="muted" style={{ margin: 0 }}>No notifications yet.</p>
-              </div>
-            ) : (
-              <div className="notificationList">
-                {notifications.map((note, index) => (
-                  <div key={note.id ?? `${note.message}-${index}`} className="notificationItem">
-                    <div className="notificationIcon">
-                      {(note.message?.trim().charAt(0).toUpperCase() || "N")}
-                    </div>
-                    <div>
-                      <p className="notificationMessage">{note.message}</p>
-                      {note.created_at ? (
-                        <p className="notificationTime">{new Date(note.created_at).toLocaleString()}</p>
-                      ) : null}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </motion.div>
-        </div>
-      ) : null}
 
       <div className="grid3">
         <div className="col gap6">

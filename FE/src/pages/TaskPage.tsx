@@ -1,12 +1,13 @@
 import { useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowLeft, CalendarDays, CheckCircle, Pencil } from "lucide-react";
+import { ArrowLeft, CalendarDays, CheckCircle, MessageSquare, Pencil, Reply, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { getTask, updateTask, updateTaskStatus, verifyTask } from "../lib/api/tasks";
-import type { ApiTask, ApiTaskPriority, ApiTaskStatus, ApiWorkspace } from "../lib/api/types";
+import type { ApiComment, ApiTask, ApiTaskPriority, ApiTaskStatus, ApiWorkspace } from "../lib/api/types";
 import { formatDate, formatDueDate } from "../lib/date";
 import { useAuth } from "../lib/use-auth";
 import { getWorkspace } from "../lib/api/workspaces";
+import { deleteComment, editComment, listComments, postComment } from "../lib/api/comments";
 
 export default function TaskPage() {
   const navigate = useNavigate();
@@ -26,10 +27,20 @@ export default function TaskPage() {
   const [editTitle, setEditTitle] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editPriority, setEditPriority] = useState<ApiTaskPriority>("medium");
+  const [editStartDate, setEditStartDate] = useState("");
   const [editDeadline, setEditDeadline] = useState("");
   const [editAssigneeIds, setEditAssigneeIds] = useState<string[]>([]);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
+  const [comments, setComments] = useState<ApiComment[]>([]);
+  const [commentsLoading, setCommentsLoading] = useState(true);
+  const [commentsError, setCommentsError] = useState<string | null>(null);
+  const [commentDraft, setCommentDraft] = useState("");
+  const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
+  const [replyingTo, setReplyingTo] = useState<string | null>(null);
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editCommentDraft, setEditCommentDraft] = useState("");
+  const [commentActionId, setCommentActionId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isAuthenticated || !projectId || !taskId) {
@@ -48,9 +59,12 @@ export default function TaskPage() {
           getTask(projectId, taskId),
           getWorkspace(projectId),
         ]);
+        const commentData = await listComments(taskId);
         if (isActive) {
           setTask(taskData);
           setWorkspace(workspaceData);
+          setComments(commentData);
+          setCommentsError(null);
           setStatus(taskData.status);
           const member = workspaceData.members?.find((m) => m.user.id === user?.id);
           setIsLeader(member?.role === "leader");
@@ -59,7 +73,10 @@ export default function TaskPage() {
         const message = err instanceof Error ? err.message : "Failed to load task";
         if (isActive) setError(message);
       } finally {
-        if (isActive) setIsLoading(false);
+        if (isActive) {
+          setIsLoading(false);
+          setCommentsLoading(false);
+        }
       }
     };
 
@@ -68,6 +85,21 @@ export default function TaskPage() {
       isActive = false;
     };
   }, [isAuthenticated, projectId, taskId, user?.id]);
+
+  const refreshComments = async () => {
+    if (!taskId) return;
+    try {
+      setCommentsLoading(true);
+      setCommentsError(null);
+      const nextComments = await listComments(taskId);
+      setComments(nextComments);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to load comments";
+      setCommentsError(message);
+    } finally {
+      setCommentsLoading(false);
+    }
+  };
 
   const dueText = useMemo(() => {
     if (!task || task.status === "done") return "Completed";
@@ -132,6 +164,7 @@ export default function TaskPage() {
     setEditTitle(task.title);
     setEditDescription(task.description ?? "");
     setEditPriority(task.priority);
+    setEditStartDate(task.start_date ? task.start_date.slice(0, 10) : "");
     setEditDeadline(task.deadline ? task.deadline.slice(0, 10) : "");
     setEditAssigneeIds((task.assignees ?? []).map((assignee) => assignee.user.id));
     setEditError(null);
@@ -168,6 +201,7 @@ export default function TaskPage() {
         title,
         description: editDescription.trim(),
         priority: editPriority,
+        start_date: editStartDate ? new Date(editStartDate).toISOString() : null,
         deadline: editDeadline ? new Date(editDeadline).toISOString() : null,
         assigneeIds: editAssigneeIds,
       });
@@ -180,6 +214,211 @@ export default function TaskPage() {
     } finally {
       setIsSavingEdit(false);
     }
+  };
+
+  const handlePostComment = async (parentId?: string) => {
+    if (!taskId || commentActionId) return;
+    const draft = parentId ? replyDrafts[parentId] ?? "" : commentDraft;
+    const content = draft.trim();
+    if (!content) {
+      setCommentsError("Comment cannot be empty.");
+      return;
+    }
+
+    try {
+      setCommentActionId(parentId ?? "new");
+      setCommentsError(null);
+      await postComment(taskId, parentId ? { content, parent_id: parentId } : { content });
+      if (parentId) {
+        setReplyDrafts((current) => ({ ...current, [parentId]: "" }));
+        setReplyingTo(null);
+      } else {
+        setCommentDraft("");
+      }
+      await refreshComments();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to post comment";
+      setCommentsError(message);
+    } finally {
+      setCommentActionId(null);
+    }
+  };
+
+  const startEditingComment = (comment: ApiComment) => {
+    setEditingCommentId(comment.id);
+    setEditCommentDraft(comment.content);
+    setCommentsError(null);
+  };
+
+  const handleEditComment = async (commentId: string) => {
+    if (!taskId || commentActionId) return;
+    const content = editCommentDraft.trim();
+    if (!content) {
+      setCommentsError("Comment cannot be empty.");
+      return;
+    }
+
+    try {
+      setCommentActionId(commentId);
+      setCommentsError(null);
+      await editComment(taskId, commentId, content);
+      setEditingCommentId(null);
+      setEditCommentDraft("");
+      await refreshComments();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to edit comment";
+      setCommentsError(message);
+    } finally {
+      setCommentActionId(null);
+    }
+  };
+
+  const handleDeleteComment = async (commentId: string) => {
+    if (!taskId || commentActionId) return;
+    const confirmed = window.confirm("Delete this comment?");
+    if (!confirmed) return;
+
+    try {
+      setCommentActionId(commentId);
+      setCommentsError(null);
+      await deleteComment(taskId, commentId);
+      await refreshComments();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to delete comment";
+      setCommentsError(message);
+    } finally {
+      setCommentActionId(null);
+    }
+  };
+
+  const renderComment = (comment: ApiComment, isReply = false) => {
+    const canEdit = comment.user_id === user?.id;
+    const canDelete = canEdit || isLeader;
+    const isEditing = editingCommentId === comment.id;
+
+    return (
+      <div key={comment.id} className={isReply ? "commentItem reply" : "commentItem"}>
+        <div className="avatarSquare">{comment.user?.name?.[0] ?? "?"}</div>
+        <div className="commentBody">
+          <div className="commentHeader">
+            <div>
+              <p className="commentAuthor">{comment.user?.name ?? "Unknown member"}</p>
+              <p className="commentTime">{formatDate(comment.created_at)}</p>
+            </div>
+            <div className="commentActions">
+              {!isReply ? (
+                <button
+                  className="ghostBtn iconOnlyBtn"
+                  type="button"
+                  title="Reply"
+                  aria-label="Reply"
+                  onClick={() => {
+                    setReplyingTo(replyingTo === comment.id ? null : comment.id);
+                    setCommentsError(null);
+                  }}
+                >
+                  <Reply size={14} />
+                </button>
+              ) : null}
+              {canEdit ? (
+                <button
+                  className="ghostBtn iconOnlyBtn"
+                  type="button"
+                  title="Edit"
+                  aria-label="Edit comment"
+                  onClick={() => startEditingComment(comment)}
+                >
+                  <Pencil size={14} />
+                </button>
+              ) : null}
+              {canDelete ? (
+                <button
+                  className="ghostBtn iconOnlyBtn"
+                  type="button"
+                  title="Delete"
+                  aria-label="Delete comment"
+                  onClick={() => handleDeleteComment(comment.id)}
+                  disabled={commentActionId === comment.id}
+                >
+                  <Trash2 size={14} />
+                </button>
+              ) : null}
+            </div>
+          </div>
+
+          {isEditing ? (
+            <div className="commentEditor">
+              <textarea
+                className="formInput formTextarea"
+                rows={3}
+                value={editCommentDraft}
+                onChange={(event) => setEditCommentDraft(event.target.value)}
+              />
+              <div className="formActions">
+                <button
+                  className="ghostBtn"
+                  type="button"
+                  onClick={() => {
+                    setEditingCommentId(null);
+                    setEditCommentDraft("");
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="primaryBtn"
+                  type="button"
+                  onClick={() => handleEditComment(comment.id)}
+                  disabled={commentActionId === comment.id}
+                >
+                  {commentActionId === comment.id ? "Saving..." : "Save"}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <p className="commentText">{comment.content}</p>
+          )}
+
+          {!isReply && replyingTo === comment.id ? (
+            <div className="replyComposer">
+              <textarea
+                className="formInput formTextarea"
+                rows={3}
+                placeholder="Write a reply"
+                value={replyDrafts[comment.id] ?? ""}
+                onChange={(event) =>
+                  setReplyDrafts((current) => ({ ...current, [comment.id]: event.target.value }))
+                }
+              />
+              <div className="formActions">
+                <button
+                  className="ghostBtn"
+                  type="button"
+                  onClick={() => setReplyingTo(null)}
+                >
+                  <X size={14} />
+                  Cancel
+                </button>
+                <button
+                  className="primaryBtn"
+                  type="button"
+                  onClick={() => handlePostComment(comment.id)}
+                  disabled={commentActionId === comment.id}
+                >
+                  {commentActionId === comment.id ? "Posting..." : "Reply"}
+                </button>
+              </div>
+            </div>
+          ) : null}
+
+          {!isReply && comment.replies?.length ? (
+            <div className="commentReplies">
+              {comment.replies.map((reply) => renderComment(reply, true))}
+            </div>
+          ) : null}
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -296,6 +535,11 @@ export default function TaskPage() {
               )}
 
               <div className="detailMetaItem">
+                <span className="detailMetaLabel">Start</span>
+                <span className="detailMetaValue">{task.start_date ? formatDate(task.start_date) : "No start date"}</span>
+              </div>
+
+              <div className="detailMetaItem">
                 <span className="detailMetaLabel">Created</span>
                 <span className="detailMetaValue">{formatDate(task.created_at)}</span>
               </div>
@@ -348,6 +592,62 @@ export default function TaskPage() {
           <p className="muted" style={{ margin: 0 }}>Task not found.</p>
         )}
       </motion.div>
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="card cardPad4"
+      >
+        <div className="sectionHeaderRow">
+          <div>
+            <h2 className="sectionTitle">Comments</h2>
+            <p className="muted" style={{ margin: "4px 0 0", fontSize: 13 }}>
+              Thread updates, decisions, and one-level replies for this task.
+            </p>
+          </div>
+          <MessageSquare size={18} className="muted" />
+        </div>
+
+        <div className="commentComposer">
+          <textarea
+            className="formInput formTextarea"
+            rows={3}
+            placeholder="Add a comment"
+            value={commentDraft}
+            onChange={(event) => setCommentDraft(event.target.value)}
+          />
+          <div className="formActions">
+            <button
+              className="primaryBtn"
+              type="button"
+              onClick={() => handlePostComment()}
+              disabled={commentActionId === "new"}
+            >
+              {commentActionId === "new" ? "Posting..." : "Post comment"}
+            </button>
+          </div>
+        </div>
+
+        {commentsError ? (
+          <p className="emptyStateText errorText" style={{ margin: "12px 0 0" }}>{commentsError}</p>
+        ) : null}
+
+        <div className="commentList">
+          {commentsLoading ? (
+            <div className="skeletonStack" aria-label="Loading comments">
+              <div className="skeletonLine" />
+              <div className="skeletonLine" />
+            </div>
+          ) : comments.length === 0 ? (
+            <div className="emptyState">
+              <MessageSquare size={18} />
+              <p className="emptyStateTitle">No comments yet</p>
+              <p className="emptyStateText">Start the thread with the context the next teammate needs.</p>
+            </div>
+          ) : (
+            comments.map((comment) => renderComment(comment))
+          )}
+        </div>
+      </motion.div>
       {isLeader && task && isEditOpen ? (
         <div
           role="dialog"
@@ -393,6 +693,18 @@ export default function TaskPage() {
                     <option value="medium">Medium</option>
                     <option value="low">Low</option>
                   </select>
+                </label>
+                <label className="formField">
+                  <span className="formLabel">Start date</span>
+                  <span className="dateInputShell">
+                    <input
+                      className="formInput"
+                      type="date"
+                      value={editStartDate}
+                      onChange={(event) => setEditStartDate(event.target.value)}
+                    />
+                    <CalendarDays className="dateInputIcon" size={18} />
+                  </span>
                 </label>
                 <label className="formField">
                   <span className="formLabel">Deadline</span>

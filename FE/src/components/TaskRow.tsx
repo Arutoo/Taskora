@@ -10,6 +10,7 @@ export type TaskRowItem = {
   project: string;
   assignee: string;
   workspaceId?: string;
+  isVerified?: boolean;
 };
 
 type TaskRowProps = {
@@ -27,6 +28,7 @@ export default function TaskRow({ task, onClick }: TaskRowProps) {
 
   const isCompleted = task.status === "completed" || task.status === "done";
   const dueLabel = isCompleted ? "Completed" : task.dueDate;
+  const showUnverified = isCompleted && !task.isVerified;
 
   return (
     <button type="button" onClick={onClick} className="taskRow">
@@ -39,10 +41,13 @@ export default function TaskRow({ task, onClick }: TaskRowProps) {
           {task.project} • {task.assignee}
         </div>
       </div>
-      <div
-        className={`taskDue font-mono ${task.dueUrgent && !isCompleted ? "taskDueOverdue" : task.hasDeadline && !isCompleted ? "taskDueDeadline" : ""}`}
-      >
-        {dueLabel}
+      <div className="taskRowEnd">
+        {showUnverified ? <span className="unverifiedTag">Unverified</span> : null}
+        <span
+          className={`taskDue font-mono ${task.dueUrgent && !isCompleted ? "taskDueOverdue" : task.hasDeadline && !isCompleted ? "taskDueDeadline" : ""}`}
+        >
+          {dueLabel}
+        </span>
       </div>
     </button>
   );
