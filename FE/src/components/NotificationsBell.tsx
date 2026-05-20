@@ -1,6 +1,7 @@
 import { Bell, Check, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { motion } from "framer-motion";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   listNotifications,
   markAllNotificationsRead,
@@ -139,22 +140,8 @@ export default function NotificationsBell() {
     }
   };
 
-  return (
-    <>
-      <button
-        className="iconBtn"
-        type="button"
-        aria-label="Notifications"
-        title="Notifications"
-        onClick={openNotifications}
-      >
-        <Bell size={18} />
-        {unreadCount > 0 ? (
-          <span className="badgeDot" aria-label={`${unreadCount} unread notifications`} />
-        ) : null}
-      </button>
-
-      {isOpen ? (
+  const notificationDialog = isOpen && typeof document !== "undefined"
+    ? createPortal(
         <div
           className="notificationOverlay"
           role="dialog"
@@ -255,8 +242,27 @@ export default function NotificationsBell() {
               </>
             )}
           </motion.div>
-        </div>
-      ) : null}
+        </div>,
+        document.body
+      )
+    : null;
+
+  return (
+    <>
+      <button
+        className="iconBtn"
+        type="button"
+        aria-label="Notifications"
+        title="Notifications"
+        onClick={openNotifications}
+      >
+        <Bell size={18} />
+        {unreadCount > 0 ? (
+          <span className="badgeDot" aria-label={`${unreadCount} unread notifications`} />
+        ) : null}
+      </button>
+
+      {notificationDialog}
     </>
   );
 }

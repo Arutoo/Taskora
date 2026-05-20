@@ -299,7 +299,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .statusCompleted { background: var(--c-success); box-shadow: 0 0 0 4px color-mix(in srgb, var(--c-success) 18%, transparent); }
 .statusOverdue { font-size: 12px; font-weight: 800; color: color-mix(in srgb, var(--c-destructive) 82%, white 8%); letter-spacing: 0.02em; }
 
-.sectionActionBtn, .ghostBtn, .primaryBtn, .memberSearchBtn, .memberResultBtn, .filterChip {
+.sectionActionBtn, .ghostBtn, .primaryBtn, .dangerBtn, .memberSearchBtn, .memberResultBtn, .filterChip {
   cursor: pointer;
   transition: background 180ms ease, color 180ms ease, border-color 180ms ease, transform 180ms ease, box-shadow 180ms ease, filter 180ms ease;
 }
@@ -379,8 +379,26 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   filter: saturate(1.08);
   box-shadow: 0 18px 42px color-mix(in srgb, var(--c-primary) 24%, transparent);
 }
-.iconBtn:active, .primaryBtn:active, .ghostBtn:active, .sectionActionBtn:active, .taskRow:active, .projectCard:active, .authButton:active { transform: translateY(1px) scale(0.99); }
-.primaryBtn:disabled, .ghostBtn:disabled, .memberSearchBtn:disabled, .authButton:disabled {
+.dangerBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 11px 18px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--c-destructive) 42%, transparent);
+  background: color-mix(in srgb, var(--c-destructive) 12%, transparent);
+  color: color-mix(in srgb, var(--c-destructive) 86%, white 10%);
+  font-size: 13px;
+  font-weight: 850;
+}
+.dangerBtn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  background: color-mix(in srgb, var(--c-destructive) 18%, transparent);
+  border-color: color-mix(in srgb, var(--c-destructive) 58%, transparent);
+}
+.iconBtn:active, .primaryBtn:active, .ghostBtn:active, .dangerBtn:active, .sectionActionBtn:active, .taskRow:active, .projectCard:active, .authButton:active { transform: translateY(1px) scale(0.99); }
+.primaryBtn:disabled, .ghostBtn:disabled, .dangerBtn:disabled, .memberSearchBtn:disabled, .authButton:disabled {
   cursor: not-allowed;
   opacity: 0.62;
   transform: none;
@@ -515,6 +533,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 }
 .formField { display: grid; gap: 8px; }
 .formLabel, .authLabel { font-size: 12px; color: var(--c-muted-foreground); font-weight: 750; }
+.requiredLabel::after {
+  content: " *";
+  color: color-mix(in srgb, var(--c-accent-3) 88%, white 6%);
+  font-weight: 900;
+}
 .formInput, .authInput {
   width: 100%;
   padding: 12px 14px;
@@ -691,7 +714,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   padding: 20px;
   background: color-mix(in srgb, var(--c-background) 72%, transparent);
   backdrop-filter: blur(10px);
-  z-index: 40;
+  z-index: 90;
 }
 .modalDialog { width: min(560px, 92vw); max-height: min(760px, 92dvh); overflow: auto; }
 .taskDetailGrid { display: grid; gap: 22px; }
@@ -773,9 +796,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   padding: 90px 28px 28px;
   background: color-mix(in srgb, var(--c-background) 72%, transparent);
   backdrop-filter: blur(10px);
-  z-index: 50;
+  z-index: 1000;
 }
 .notificationModal {
+  position: relative;
+  z-index: 1001;
   width: min(420px, 92vw);
   background: linear-gradient(160deg, color-mix(in srgb, var(--c-card) 96%, white 2%), color-mix(in srgb, var(--c-background) 94%, black 2%));
   border: 1px solid color-mix(in srgb, var(--c-border) 70%, transparent);
@@ -1058,11 +1083,40 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   height: 10px;
   margin-top: 6px;
   border-radius: 999px;
-  background: var(--c-primary);
-  box-shadow: 0 0 0 5px color-mix(in srgb, var(--c-primary) 13%, transparent);
+  background: var(--activity-color, var(--c-primary));
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--activity-color, var(--c-primary)) 13%, transparent);
 }
+.activityMarker.taskCreated { --activity-color: var(--c-destructive); }
+.activityMarker.statusChanged { --activity-color: #66aaff; }
+.activityMarker.taskVerified { --activity-color: var(--c-success); }
+.activityMarker.memberJoined { --activity-color: var(--c-success); }
+.activityMarker.shortcutAdded { --activity-color: var(--c-accent-2); }
+.activityMarker.commentAdded { --activity-color: #60a5fa; }
 .activityText { margin: 0; line-height: 1.45; }
-.activityMeta { margin: 5px 0 0; color: var(--c-muted-foreground); font-size: 12px; }
+.activityMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  margin: 6px 0 0;
+  color: var(--c-muted-foreground);
+  font-size: 12px;
+}
+.activityProjectLabel {
+  display: inline-flex;
+  align-items: center;
+  max-width: 220px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--c-primary) 28%, transparent);
+  background: color-mix(in srgb, var(--c-primary) 12%, transparent);
+  color: var(--c-card-foreground);
+  font-size: 12px;
+  font-weight: 850;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 .shortcutForm {
   display: grid;
@@ -1158,7 +1212,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .authSubtitle { margin: 0 0 22px; font-size: 14px; color: var(--c-muted-foreground); }
 .authForm { display: grid; gap: 14px; }
 .authField { display: grid; gap: 6px; }
-.authButton { width: 100%; margin-top: 6px; padding: 12px 16px; }
+.authButton { width: 100%; margin-top: 6px; padding: 13px 16px; font-size: 16px; }
 .authAlt { margin: 18px 0 0; font-size: 12px; color: var(--c-muted-foreground); text-align: center; }
 .authAlt a { color: var(--c-foreground); text-decoration: none; border-bottom: 1px solid color-mix(in srgb, var(--c-foreground) 45%, transparent); }
 
