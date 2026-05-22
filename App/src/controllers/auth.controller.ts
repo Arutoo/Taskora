@@ -76,6 +76,17 @@ export async function refresh(req: Request, res: Response, next: NextFunction): 
   }
 }
 
+export async function verifyEmail(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const token = req.query.token as string | undefined;
+    if (!token) return next(new AppError('Verification token required', 400));
+    const result = await authService.verifyEmail(token);
+    ok(res, result, result.message);
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function logout(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
   try {
     const body = logoutSchema.parse(req.body);

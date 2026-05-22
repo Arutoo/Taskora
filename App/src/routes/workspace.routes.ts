@@ -20,9 +20,11 @@ router.delete('/:id', authenticate, wsRole, requireLeader, ctrl.archiveWorkspace
 // Membership
 router.post('/:id/invite', authenticate, wsRole, requireLeader, ctrl.invite);
 router.post('/:id/join', authenticate, ctrl.joinWorkspace);
+router.post('/:id/leave', authenticate, wsRole, requireMember, ctrl.leaveWorkspace);
+router.patch('/:id/transfer', authenticate, wsRole, requireLeader, ctrl.transferOwnership);
 router.delete('/:id/members/:userId', authenticate, wsRole, requireLeader, ctrl.removeMember);
 
-// Tasks (S2)
+// Tasks
 router.post('/:id/tasks', authenticate, wsRole, requireLeader, taskCtrl.createTask);
 router.get('/:id/tasks', authenticate, wsRole, requireMember, taskCtrl.listTasks);
 router.get('/:id/tasks/:taskId', authenticate, wsRole, requireMember, taskCtrl.getTask);
@@ -30,17 +32,18 @@ router.patch('/:id/tasks/:taskId', authenticate, wsRole, requireLeader, taskCtrl
 router.delete('/:id/tasks/:taskId', authenticate, wsRole, requireLeader, taskCtrl.deleteTask);
 router.patch('/:id/tasks/:taskId/status', authenticate, wsRole, requireMember, taskCtrl.updateStatus);
 router.patch('/:id/tasks/:taskId/verify', authenticate, wsRole, requireLeader, taskCtrl.verifyTask);
+router.patch('/:id/tasks/:taskId/unverify', authenticate, wsRole, requireLeader, taskCtrl.unverifyTask);
 
-// Calendar (S3-08)
+// Calendar
 router.get('/:id/calendar', authenticate, wsRole, requireMember, taskCtrl.getCalendar);
 
-// Contributions (S3-09)
+// Contributions
 router.get('/:id/contributions', authenticate, wsRole, requireMember, contributionCtrl.getContributions);
 
-// Activity log (S3-10)
+// Activity log
 router.get('/:id/activity', authenticate, wsRole, requireMember, activityCtrl.getLogs);
 
-// Shortcuts (S3-11)
+// Shortcuts
 router.post('/:id/shortcuts', authenticate, wsRole, requireMember, shortcutCtrl.addShortcut);
 router.get('/:id/shortcuts', authenticate, wsRole, requireMember, shortcutCtrl.listShortcuts);
 router.delete('/:id/shortcuts/:sid', authenticate, wsRole, requireMember, shortcutCtrl.deleteShortcut);

@@ -121,6 +121,20 @@ export async function verifyTask(req: AuthRequest, res: Response, next: NextFunc
   }
 }
 
+export async function unverifyTask(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+  try {
+    if (!req.user) return next(new AppError('Unauthorized', 401));
+    const task = await taskService.unverifyTask(
+      req.params.taskId as string,
+      req.user.id,
+      req.params.id as string,
+    );
+    ok(res, task, 'Task unverified');
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function getCalendar(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
   try {
     const calendar = await taskService.getCalendar(req.params.id as string);

@@ -98,6 +98,10 @@ export async function verifyTask(id: string) {
   return prisma.task.update({ where: { id }, data: { is_verified: true } });
 }
 
+export async function unverifyTask(id: string) {
+  return prisma.task.update({ where: { id }, data: { is_verified: false } });
+}
+
 export async function flagOverdueTasks(): Promise<string[]> {
   const now = new Date();
   const overdue = await prisma.task.findMany({

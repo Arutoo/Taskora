@@ -1,6 +1,8 @@
 import { NotificationType, ReferenceType } from '@prisma/client';
 import * as notificationRepo from '../repositories/notification.repository';
+import * as userRepo from '../repositories/user.repository';
 import { emitToUser } from '../utils/socketEmitter';
+import { sendNotificationEmail } from '../utils/email';
 
 export async function createAndPush(data: {
   user_id: string;
@@ -11,6 +13,12 @@ export async function createAndPush(data: {
 }) {
   const notification = await notificationRepo.createNotification(data);
   emitToUser(data.user_id, 'notification:new', notification);
+
+  // Fire-and-forget email — never block the main flow on email failure
+  userRepo.findUserById(data.user_id)
+    .then(user => { if (user) return sendNotificationEmail(user.email, data.message); })
+    .catch(() => {});
+
   return notification;
 }
 

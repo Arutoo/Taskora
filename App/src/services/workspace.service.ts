@@ -1,11 +1,16 @@
+import { randomBytes } from 'crypto';
 import { AppError } from '../types';
-import { signInviteToken, verifyInviteToken } from '../utils/jwt';
 import * as workspaceRepo from '../repositories/workspace.repository';
 import * as userRepo from '../repositories/user.repository';
 import * as notificationService from './notification.service';
 import * as activityLogService from './activityLog.service';
 import * as contributionService from './contribution.service';
-import { NotificationType, ReferenceType } from '@prisma/client';
+import { NotificationType, ReferenceType, Role } from '@prisma/client';
+
+function generateInviteCode(): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  return Array.from(randomBytes(8)).map(b => chars[b % chars.length]).join('');
+}
 
 export async function createWorkspace(
   userId: string,
@@ -52,8 +57,10 @@ export async function archiveWorkspace(workspaceId: string) {
   return { workspace: archived, final_contributions: contributions };
 }
 
-export async function generateInviteLink(workspaceId: string, invitedBy: string): Promise<string> {
-  return signInviteToken({ workspaceId, invitedBy });
+export async function generateInviteLink(workspaceId: string, _invitedBy: string): Promise<string> {
+  const code = generateInviteCode();
+  await workspaceRepo.setInviteCode(workspaceId, code);
+  return code;
 }
 
 export async function inviteByEmail(
@@ -88,27 +95,51 @@ export async function inviteByEmail(
   return { message: 'User added to workspace', userId: user.id };
 }
 
-export async function joinViaToken(token: string, userId: string) {
-  const payload = verifyInviteToken(token);
-
-  const ws = await workspaceRepo.findWorkspaceById(payload.workspaceId);
-  if (!ws) throw new AppError('Workspace not found', 404);
+export async function joinViaCode(code: string, userId: string) {
+  const ws = await workspaceRepo.findWorkspaceByInviteCode(code.toUpperCase());
+  if (!ws) throw new AppError('Invalid invite code', 404);
   if (ws.is_archived) throw new AppError('Workspace is archived', 410);
 
-  const existing = await workspaceRepo.findMember(payload.workspaceId, userId);
+  const existing = await workspaceRepo.findMember(ws.id, userId);
   if (existing) throw new AppError('Already a member of this workspace', 409);
 
-  await workspaceRepo.addMember(payload.workspaceId, userId);
+  await workspaceRepo.addMember(ws.id, userId);
 
   await activityLogService.log({
-    workspace_id: payload.workspaceId,
+    workspace_id: ws.id,
     user_id: userId,
     action_type: 'member_joined',
-    reference_id: payload.workspaceId,
+    reference_id: ws.id,
     reference_type: ReferenceType.workspace,
   });
 
   return ws;
+}
+
+export async function leaveWorkspace(workspaceId: string, userId: string) {
+  const member = await workspaceRepo.findMember(workspaceId, userId);
+  if (!member) throw new AppError('Not a member of this workspace', 404);
+
+  if (member.role === Role.leader) {
+    const leaderCount = await workspaceRepo.countLeaders(workspaceId);
+    if (leaderCount <= 1) {
+      throw new AppError('You are the sole leader. Transfer ownership to another member before leaving.', 400);
+    }
+  }
+
+  return workspaceRepo.removeMember(workspaceId, userId);
+}
+
+export async function transferOwnership(workspaceId: string, leaderId: string, newLeaderId: string) {
+  if (leaderId === newLeaderId) throw new AppError('You are already the leader', 400);
+
+  const target = await workspaceRepo.findMember(workspaceId, newLeaderId);
+  if (!target) throw new AppError('Target user is not a workspace member', 404);
+
+  await workspaceRepo.updateMemberRole(workspaceId, newLeaderId, Role.leader);
+  await workspaceRepo.updateMemberRole(workspaceId, leaderId, Role.member);
+
+  return { message: 'Ownership transferred successfully' };
 }
 
 export async function removeMember(workspaceId: string, targetUserId: string, leaderId: string) {
