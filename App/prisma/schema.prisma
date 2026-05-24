@@ -55,9 +55,10 @@ model User {
   name               String   @db.VarChar(100)
   email              String   @unique @db.VarChar(255)
   password_hash      String   @db.VarChar(255)
-  email_verified     Boolean  @default(false)
-  verification_token String?  @db.VarChar(255)
-  created_at         DateTime @default(now())
+  email_verified              Boolean   @default(false)
+  verification_token          String?   @db.VarChar(255)
+  verification_token_expires_at DateTime?
+  created_at                  DateTime  @default(now())
 
   refresh_tokens    RefreshToken[]
   workspace_members WorkspaceMember[]

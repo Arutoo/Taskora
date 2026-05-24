@@ -23,10 +23,27 @@ export async function userExistsByEmail(email: string): Promise<boolean> {
   return count > 0;
 }
 
-export async function setVerificationToken(userId: string, token: string) {
+export async function setVerificationToken(userId: string, token: string, expiresAt: Date) {
   return prisma.user.update({
     where: { id: userId },
-    data: { verification_token: token },
+    data: { verification_token: token, verification_token_expires_at: expiresAt },
+  });
+}
+
+export async function overwriteUnverifiedUser(
+  userId: string,
+  data: { name: string; password_hash: string; token: string; expiresAt: Date },
+) {
+  return prisma.user.update({
+    where: { id: userId },
+    data: {
+      name: data.name,
+      password_hash: data.password_hash,
+      verification_token: data.token,
+      verification_token_expires_at: data.expiresAt,
+      email_verified: false,
+    },
+    select: { id: true, name: true, email: true, created_at: true },
   });
 }
 
