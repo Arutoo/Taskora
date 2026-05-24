@@ -38,6 +38,7 @@ enum ActionType {
   task_created
   status_changed
   task_verified
+  task_unverified
   member_joined
   shortcut_added
   comment_added
@@ -50,11 +51,13 @@ enum ReferenceType {
 }
 
 model User {
-  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name          String   @db.VarChar(100)
-  email         String   @unique @db.VarChar(255)
-  password_hash String   @db.VarChar(255)
-  created_at    DateTime @default(now())
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name               String   @db.VarChar(100)
+  email              String   @unique @db.VarChar(255)
+  password_hash      String   @db.VarChar(255)
+  email_verified     Boolean  @default(false)
+  verification_token String?  @db.VarChar(255)
+  created_at         DateTime @default(now())
 
   refresh_tokens    RefreshToken[]
   workspace_members WorkspaceMember[]
@@ -83,6 +86,7 @@ model Workspace {
   name        String   @db.VarChar(150)
   description String?
   is_archived Boolean  @default(false)
+  invite_code String?  @unique @db.VarChar(10)
   created_by  String   @db.Uuid
   created_at  DateTime @default(now())
 

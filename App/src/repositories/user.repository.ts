@@ -23,6 +23,24 @@ export async function userExistsByEmail(email: string): Promise<boolean> {
   return count > 0;
 }
 
+export async function setVerificationToken(userId: string, token: string) {
+  return prisma.user.update({
+    where: { id: userId },
+    data: { verification_token: token },
+  });
+}
+
+export async function findUserByVerificationToken(token: string) {
+  return prisma.user.findFirst({ where: { verification_token: token } });
+}
+
+export async function markEmailVerified(userId: string) {
+  return prisma.user.update({
+    where: { id: userId },
+    data: { email_verified: true, verification_token: null },
+  });
+}
+
 export async function findAllUsers(search?: string) {
   return prisma.user.findMany({
     where: search

@@ -173,6 +173,25 @@ export async function verifyTask(taskId: string, leaderId: string, workspaceId: 
   return updated;
 }
 
+export async function unverifyTask(taskId: string, leaderId: string, workspaceId: string) {
+  const task = await taskRepo.findTaskById(taskId);
+  if (!task || task.workspace_id !== workspaceId) throw new AppError('Task not found', 404);
+  if (!task.is_verified) throw new AppError('Task is not verified', 400);
+
+  const updated = await taskRepo.unverifyTask(taskId);
+
+  await activityLogService.log({
+    workspace_id: workspaceId,
+    user_id: leaderId,
+    action_type: 'task_unverified',
+    reference_id: taskId,
+    reference_type: ReferenceType.task,
+  });
+
+  emitToWorkspace(workspaceId, 'task:updated', { taskId, changes: { is_verified: false } });
+  return updated;
+}
+
 export async function getCalendar(workspaceId: string) {
   return taskRepo.findTasksByWorkspaceCalendar(workspaceId);
 }

@@ -19,7 +19,7 @@ const inviteSchema = z.object({
 });
 
 const joinSchema = z.object({
-  token: z.string(),
+  code: z.string().min(1),
 });
 
 export async function createWorkspace(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
@@ -77,12 +77,11 @@ export async function invite(req: AuthRequest, res: Response, next: NextFunction
     const body = inviteSchema.parse(req.body);
 
     if (body.email) {
-      // Invite by email — lookup + add directly
       const result = await workspaceService.inviteByEmail(req.params.id as string, req.user.id, body.email);
       ok(res, result, 'User added to workspace');
     } else {
-      const token = await workspaceService.generateInviteLink(req.params.id as string, req.user.id);
-      ok(res, { inviteToken: token }, 'Invite link generated');
+      const code = await workspaceService.generateInviteLink(req.params.id as string, req.user.id);
+      ok(res, { inviteCode: code }, 'Invite code generated');
     }
   } catch (err) {
     next(err);
@@ -93,8 +92,29 @@ export async function joinWorkspace(req: AuthRequest, res: Response, next: NextF
   try {
     if (!req.user) return next(new AppError('Unauthorized', 401));
     const body = joinSchema.parse(req.body);
-    const ws = await workspaceService.joinViaToken(body.token, req.user.id);
+    const ws = await workspaceService.joinViaCode(body.code, req.user.id);
     ok(res, ws, 'Joined workspace successfully');
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function leaveWorkspace(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+  try {
+    if (!req.user) return next(new AppError('Unauthorized', 401));
+    await workspaceService.leaveWorkspace(req.params.id as string, req.user.id);
+    ok(res, null, 'Left workspace successfully');
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function transferOwnership(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+  try {
+    if (!req.user) return next(new AppError('Unauthorized', 401));
+    const { newLeaderId } = z.object({ newLeaderId: z.string().uuid() }).parse(req.body);
+    const result = await workspaceService.transferOwnership(req.params.id as string, req.user.id, newLeaderId);
+    ok(res, result, result.message);
   } catch (err) {
     next(err);
   }
