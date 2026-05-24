@@ -8,18 +8,18 @@
   ],
   "routes": [
     {
-      "src": "/api/(.*)",
+      "src": "/(.*)",
       "dest": "src/app.ts"
     }
   ],
   "crons": [
     {
       "path": "/api/v1/jobs/check-overdue",
-      "schedule": "0 * * * *"
+      "schedule": "0 0 * * *"
     },
     {
       "path": "/api/v1/jobs/deadline-reminders",
-      "schedule": "0 * * * *"
+      "schedule": "0 0 * * *"
     }
   ]
 }
