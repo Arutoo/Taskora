@@ -276,6 +276,49 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .navItemIcon { width: 18px; height: 18px; flex: 0 0 auto; }
 .navLabel { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .projectDot, .statusDot { width: 9px; height: 9px; border-radius: 999px; display: inline-block; flex: 0 0 auto; }
+.projectNavGroup { display: grid; gap: 5px; }
+.projectNavItem { width: 100%; }
+.projectNavChevron {
+  width: 15px;
+  height: 15px;
+  margin-left: auto;
+  color: var(--c-muted-foreground);
+  transition: transform 180ms ease, color 180ms ease;
+}
+.projectNavItem:hover .projectNavChevron,
+.projectNavItem.active .projectNavChevron {
+  color: var(--c-foreground);
+}
+.projectNavChevron.expanded { transform: rotate(180deg); }
+.projectSubnav {
+  display: grid;
+  gap: 5px;
+  padding: 0 0 2px 28px;
+}
+.projectSubnavItem {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 34px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  color: var(--c-muted-foreground);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 750;
+  transition: background 180ms ease, color 180ms ease, border-color 180ms ease, transform 180ms ease;
+}
+.projectSubnavItem:hover {
+  color: var(--c-foreground);
+  background: color-mix(in srgb, var(--c-secondary) 64%, transparent);
+  transform: translateX(2px);
+}
+.projectSubnavItem.active {
+  color: var(--c-foreground);
+  background: color-mix(in srgb, var(--c-primary) 13%, transparent);
+  border-color: color-mix(in srgb, var(--c-primary) 28%, transparent);
+}
 
 .main { padding: 30px; }
 .pageContainer { max-width: 1360px; width: 100%; margin: 0 auto; }

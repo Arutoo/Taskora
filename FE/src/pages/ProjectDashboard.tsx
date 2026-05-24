@@ -5,7 +5,15 @@ import { useEffect, useMemo, useState } from "react";
 import CalendarWidget from "../components/CalendarWidget";
 import TaskRow from "../components/TaskRow";
 import type { TaskRowItem } from "../components/TaskRow";
-import { archiveWorkspace, createInviteLink, getWorkspace, inviteToWorkspace, removeMember } from "../lib/api/workspaces";
+import {
+  archiveWorkspace,
+  createInviteLink,
+  getWorkspace,
+  inviteToWorkspace,
+  leaveWorkspace,
+  removeMember,
+  transferWorkspaceOwnership,
+} from "../lib/api/workspaces";
 import { createTask, deleteTask, listTasks } from "../lib/api/tasks";
 import { createShortcut, deleteShortcut, listShortcuts } from "../lib/api/shortcuts";
 import { getWorkspaceCalendar, getWorkspaceContributions } from "../lib/api/workspacefunc";
@@ -77,7 +85,7 @@ export default function ProjectDashboard() {
   const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
   const [taskError, setTaskError] = useState<string | null>(null);
   const [isCreatingTask, setIsCreatingTask] = useState(false);
-  const [inviteToken, setInviteToken] = useState<string | null>(null);
+  const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [inviteWarning, setInviteWarning] = useState<string | null>(null);
   const [isGeneratingInviteToken, setIsGeneratingInviteToken] = useState(false);
   const [inviteTokenError, setInviteTokenError] = useState<string | null>(null);
@@ -93,6 +101,8 @@ export default function ProjectDashboard() {
   const [deletingShortcutId, setDeletingShortcutId] = useState<string | null>(null);
   const [leaveError, setLeaveError] = useState<string | null>(null);
   const [isLeavingWorkspace, setIsLeavingWorkspace] = useState(false);
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+  const [transferTargetId, setTransferTargetId] = useState("");
   const todayInputValue = useMemo(() => localDateInputValue(), []);
 
   useEffect(() => {
@@ -126,8 +136,8 @@ export default function ProjectDashboard() {
         setCalendarTasks(calendarData);
         setContributions(contributionData);
         setShortcuts(shortcutData);
-        const state = location.state as { inviteToken?: string; inviteWarning?: string } | null;
-        setInviteToken(state?.inviteToken ?? null);
+        const state = location.state as { inviteCode?: string; inviteToken?: string; inviteWarning?: string } | null;
+        setInviteCode(state?.inviteCode ?? state?.inviteToken ?? null);
         setInviteWarning(state?.inviteWarning ?? null);
       } catch (err) {
         const message = err instanceof Error ? err.message : "Failed to load workspace";
@@ -147,6 +157,10 @@ export default function ProjectDashboard() {
   const isLeader = currentMember?.role === "leader";
   const leaderCount = workspace?.members?.filter((member) => member.role === "leader").length ?? 0;
   const isSoleLeader = isLeader && leaderCount <= 1;
+  const transferCandidates = useMemo(() => {
+    return workspace?.members?.filter((member) => member.user.id !== user?.id) ?? [];
+  }, [user?.id, workspace?.members]);
+  const inviteLink = inviteCode ? `${window.location.origin}/join?code=${encodeURIComponent(inviteCode)}` : "";
 
   const deadlines = useMemo<DashboardDeadline[]>(() => {
     return calendarTasks.flatMap((task) => {
@@ -454,9 +468,9 @@ export default function ProjectDashboard() {
       setIsGeneratingInviteToken(true);
       setInviteTokenError(null);
       const result = await createInviteLink(id);
-      setInviteToken(result.inviteToken);
+      setInviteCode(result.inviteCode);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to generate invite token";
+      const message = err instanceof Error ? err.message : "Failed to generate invite code";
       setInviteTokenError(message);
     } finally {
       setIsGeneratingInviteToken(false);
@@ -464,30 +478,54 @@ export default function ProjectDashboard() {
   };
 
   const handleCopyInvite = async () => {
-    if (!inviteToken) return;
+    if (!inviteLink) return;
     try {
-      await navigator.clipboard.writeText(inviteToken);
+      await navigator.clipboard.writeText(inviteLink);
       setInviteTokenError(null);
     } catch {
-      setInviteTokenError("Failed to copy token. Please copy it manually.");
+      setInviteTokenError("Failed to copy link. Please copy it manually.");
     }
   };
 
   const handleLeaveWorkspace = async () => {
-    if (!id || !user || !currentMember || isLeavingWorkspace) return;
+    if (!id || !currentMember || isLeavingWorkspace) return;
     setLeaveError(null);
+
+    if (isSoleLeader) {
+      if (transferCandidates.length === 0) {
+        setLeaveError("Add another member before leaving, then transfer ownership to them.");
+        return;
+      }
+      setTransferTargetId((current) => current || transferCandidates[0]?.user.id || "");
+      setIsTransferModalOpen(true);
+      return;
+    }
 
     const confirmed = window.confirm("Leave this workspace? You will lose access to its tasks and activity.");
     if (!confirmed) return;
 
     try {
       setIsLeavingWorkspace(true);
-      await removeMember(id, currentMember.user.id);
+      await leaveWorkspace(id);
       navigate("/", { replace: true });
     } catch (err) {
-      const message = err instanceof ApiError && (err.status === 400 || err.status === 403)
-        ? "The current API only allows leaders to remove members. Leaving as a member needs backend support for self-removal."
-        : err instanceof Error ? err.message : "Failed to leave workspace";
+      const message = err instanceof Error ? err.message : "Failed to leave workspace";
+      setLeaveError(message);
+    } finally {
+      setIsLeavingWorkspace(false);
+    }
+  };
+
+  const handleTransferAndLeave = async () => {
+    if (!id || !transferTargetId || isLeavingWorkspace) return;
+    try {
+      setIsLeavingWorkspace(true);
+      setLeaveError(null);
+      await transferWorkspaceOwnership(id, transferTargetId);
+      await leaveWorkspace(id);
+      navigate("/", { replace: true });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to transfer ownership and leave workspace";
       setLeaveError(message);
     } finally {
       setIsLeavingWorkspace(false);
@@ -538,20 +576,23 @@ export default function ProjectDashboard() {
       {isLeader ? (
         <div className="card" style={{ padding: 16, display: "flex", gap: 10, alignItems: "center" }}>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 12, color: "var(--c-muted-foreground)", marginBottom: 6 }}>Invite token</div>
-            {inviteToken ? (
-              <input className="formInput font-mono" value={inviteToken} readOnly />
+            <div style={{ fontSize: 12, color: "var(--c-muted-foreground)", marginBottom: 6 }}>Invite code</div>
+            {inviteCode ? (
+              <div style={{ display: "grid", gap: 8 }}>
+                <input className="formInput font-mono" value={inviteCode} readOnly />
+                <input className="formInput font-mono" value={inviteLink} readOnly />
+              </div>
             ) : (
-              <p className="muted" style={{ margin: 0 }}>Generate a token and share it manually with an invitee.</p>
+              <p className="muted" style={{ margin: 0 }}>Generate a short code and shareable link for invitees.</p>
             )}
             {inviteTokenError ? <p className="emptyStateText errorText" style={{ margin: "8px 0 0" }}>{inviteTokenError}</p> : null}
           </div>
           <button className="ghostBtn" type="button" onClick={handleGenerateInviteToken} disabled={isGeneratingInviteToken}>
-            {isGeneratingInviteToken ? "Generating..." : inviteToken ? "New token" : "Generate token"}
+            {isGeneratingInviteToken ? "Generating..." : inviteCode ? "New code" : "Generate code"}
           </button>
-          {inviteToken ? (
+          {inviteCode ? (
             <button className="ghostBtn" type="button" onClick={handleCopyInvite}>
-              Copy
+              Copy link
             </button>
           ) : null}
         </div>
@@ -971,6 +1012,67 @@ export default function ProjectDashboard() {
                 </button>
               </div>
               {taskError ? <p className="muted" style={{ margin: 0 }}>{taskError}</p> : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isTransferModalOpen ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="modalOverlay"
+          onClick={() => {
+            if (!isLeavingWorkspace) setIsTransferModalOpen(false);
+          }}
+        >
+          <div className="card cardPad4 modalDialog" onClick={(event) => event.stopPropagation()}>
+            <div className="sectionHeaderRow">
+              <div>
+                <h3 className="sectionTitle">Transfer ownership</h3>
+                <p className="muted" style={{ margin: "4px 0 0", fontSize: 13 }}>
+                  Choose a new leader before leaving this workspace.
+                </p>
+              </div>
+              <LogOut size={18} className="muted" />
+            </div>
+
+            <div style={{ display: "grid", gap: 12 }}>
+              <label className="formField">
+                <span className="formLabel">New leader</span>
+                <select
+                  className="formInput"
+                  value={transferTargetId}
+                  onChange={(event) => setTransferTargetId(event.target.value)}
+                  disabled={isLeavingWorkspace}
+                >
+                  {transferCandidates.map((member) => (
+                    <option key={member.user.id} value={member.user.id}>
+                      {member.user.name} - {member.user.email}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {leaveError ? <p className="emptyStateText errorText" style={{ margin: 0 }}>{leaveError}</p> : null}
+              <div className="formActions">
+                <button
+                  className="ghostBtn"
+                  type="button"
+                  onClick={() => setIsTransferModalOpen(false)}
+                  disabled={isLeavingWorkspace}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="dangerBtn"
+                  type="button"
+                  onClick={handleTransferAndLeave}
+                  disabled={isLeavingWorkspace || !transferTargetId}
+                >
+                  <LogOut size={15} />
+                  {isLeavingWorkspace ? "Leaving..." : "Transfer & leave"}
+                </button>
+              </div>
             </div>
           </div>
         </div>

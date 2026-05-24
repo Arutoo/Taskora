@@ -47,6 +47,7 @@ export default function App() {
                 <Route path="/" element={<Dashboard />} />
                 <Route path="/project/new" element={<CreateProject />} />
                 <Route path="/project/:id" element={<ProjectDashboard />} />
+                <Route path="/tasks" element={<AssignedTasks />} />
                 <Route path="/project/:projectId/tasks" element={<AssignedTasks />} />
                 <Route path="/project/:projectId/tasks/:taskId" element={<TaskPage />} />
                 <Route path="/project/:projectId/activity" element={<WorkspaceActivity />} />
