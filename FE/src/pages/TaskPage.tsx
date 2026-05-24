@@ -2,7 +2,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ArrowLeft, CalendarDays, CheckCircle, MessageSquare, Pencil, Reply, RotateCcw, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { getTask, updateTask, updateTaskStatus, verifyTask } from "../lib/api/tasks";
+import { getTask, unverifyTask, updateTask, updateTaskStatus, verifyTask } from "../lib/api/tasks";
 import type { ApiComment, ApiTask, ApiTaskPriority, ApiTaskStatus, ApiWorkspace } from "../lib/api/types";
 import { formatDate, formatDueDate } from "../lib/date";
 import { useAuth } from "../lib/use-auth";
@@ -159,11 +159,23 @@ export default function TaskPage() {
     }
   };
 
-  const handleUnverifyTask = () => {
-    if (!isLeader || !task?.is_verified) return;
+  const handleUnverifyTask = async () => {
+    if (!projectId || !taskId || !isLeader || !task?.is_verified || isVerifying) return;
     const confirmed = window.confirm("Unverify this task and allow status updates again?");
     if (!confirmed) return;
-    setVerifyError("Unverify requires backend support. The current API only supports verifying tasks.");
+    try {
+      setIsVerifying(true);
+      setVerifyError(null);
+      await unverifyTask(projectId, taskId);
+      const refreshed = await getTask(projectId, taskId);
+      setTask(refreshed);
+      setStatus(refreshed.status);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to unverify task";
+      setVerifyError(message);
+    } finally {
+      setIsVerifying(false);
+    }
   };
 
   const openEditModal = () => {
@@ -506,9 +518,10 @@ export default function TaskPage() {
                       className="ghostBtn"
                       type="button"
                       onClick={handleUnverifyTask}
+                      disabled={isVerifying}
                     >
                       <RotateCcw size={16} />
-                      Unverify
+                      {isVerifying ? "Unverifying..." : "Unverify"}
                     </button>
                   ) : null}
                 </div>
