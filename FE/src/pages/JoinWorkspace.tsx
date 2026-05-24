@@ -1,36 +1,47 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { getWorkspace, joinWorkspace, joinWorkspaceWithToken } from "../lib/api/workspaces";
+import { getWorkspace, joinWorkspace, joinWorkspaceWithCode } from "../lib/api/workspaces";
 
 export default function JoinWorkspace() {
   const { workspaceId } = useParams<{ workspaceId?: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const [inviteToken, setInviteToken] = useState(searchParams.get("token") ?? "");
-  const [isLoading, setIsLoading] = useState(Boolean(workspaceId && searchParams.get("token")));
+  const initialCode = searchParams.get("code") ?? searchParams.get("token") ?? "";
+  const [inviteCode, setInviteCode] = useState(initialCode);
+  const [isLoading, setIsLoading] = useState(Boolean(initialCode));
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!workspaceId) return;
-
-    const token = searchParams.get("token");
-    if (!token) {
-      setError("Enter the invite token shared by your workspace leader.");
-      setIsLoading(false);
+    const code = searchParams.get("code") ?? searchParams.get("token");
+    if (!code) {
+      if (workspaceId) {
+        setError("Enter the invite code shared by your workspace leader.");
+        setIsLoading(false);
+      }
       return;
     }
+
+    setInviteCode(code);
 
     let isActive = true;
     const join = async () => {
       try {
         setIsLoading(true);
         setError(null);
-        await joinWorkspace(workspaceId, token);
+        const workspace = workspaceId
+          ? await joinWorkspace(workspaceId, code)
+          : await joinWorkspaceWithCode(code);
         if (isActive) {
-          navigate(`/project/${workspaceId}`, { replace: true });
+          navigate(`/project/${workspace.id}`, { replace: true });
         }
       } catch (err) {
+        if (!workspaceId) {
+          const message = err instanceof Error ? err.message : "Failed to join workspace";
+          if (isActive) setError(message);
+          return;
+        }
+
         try {
           await getWorkspace(workspaceId);
           if (isActive) {
@@ -54,13 +65,13 @@ export default function JoinWorkspace() {
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const token = inviteToken.trim();
-    if (!token || isLoading) return;
+    const code = inviteCode.trim().toUpperCase();
+    if (!code || isLoading) return;
 
     try {
       setIsLoading(true);
       setError(null);
-      const workspace = await joinWorkspaceWithToken(token);
+      const workspace = await joinWorkspaceWithCode(code);
       navigate(`/project/${workspace.id}`, { replace: true });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to join workspace";
@@ -75,17 +86,17 @@ export default function JoinWorkspace() {
       <div className="createProjectShell">
         <div className="createProjectHeader">
           <h1 className="pageTitle">Join workspace</h1>
-          <p className="pageSubtitle">Paste the invite token shared by your workspace leader.</p>
+          <p className="pageSubtitle">Paste the invite code shared by your workspace leader.</p>
         </div>
 
         <form className="createProjectCard" onSubmit={handleSubmit}>
           <label className="formField">
-            <span className="formLabel">Invite token</span>
-            <textarea
-              className="formInput formTextarea font-mono"
-              value={inviteToken}
-              onChange={(event) => setInviteToken(event.target.value)}
-              placeholder="Paste invite token"
+            <span className="formLabel">Invite code</span>
+            <input
+              className="formInput font-mono"
+              value={inviteCode}
+              onChange={(event) => setInviteCode(event.target.value.toUpperCase())}
+              placeholder="AB12CD34"
               autoComplete="off"
               disabled={isLoading}
             />
@@ -97,7 +108,7 @@ export default function JoinWorkspace() {
             <button className="ghostBtn" type="button" onClick={() => navigate("/")}>
               Cancel
             </button>
-            <button className="primaryBtn" type="submit" disabled={isLoading || !inviteToken.trim()}>
+            <button className="primaryBtn" type="submit" disabled={isLoading || !inviteCode.trim()}>
               {isLoading ? "Joining..." : "Join workspace"}
             </button>
           </div>

@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
 import { useParams, useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
-import { getWorkspace } from "../lib/api/workspaces";
+import { listWorkspaces } from "../lib/api/workspaces";
 import { listTasks } from "../lib/api/tasks";
 import type { ApiTask, ApiTaskStatus, ApiWorkspace } from "../lib/api/types";
 import { useAuth } from "../lib/use-auth";
@@ -16,9 +16,10 @@ export default function AssignedTasks() {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
   const [filter, setFilter] = useState<TaskFilter>("All");
+  const [workspaceFilter, setWorkspaceFilter] = useState("all");
   const { isAuthenticated, user } = useAuth();
-  const [workspace, setWorkspace] = useState<ApiWorkspace | null>(null);
-  const [tasks, setTasks] = useState<ApiTask[]>([]);
+  const [workspaces, setWorkspaces] = useState<ApiWorkspace[]>([]);
+  const [tasks, setTasks] = useState<Array<ApiTask & { workspaceName: string }>>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -30,8 +31,8 @@ export default function AssignedTasks() {
   }, [filter]);
 
   useEffect(() => {
-    if (!isAuthenticated || !projectId) {
-      setWorkspace(null);
+    if (!isAuthenticated || !user?.id) {
+      setWorkspaces([]);
       setTasks([]);
       setError(null);
       setIsLoading(false);
@@ -43,16 +44,26 @@ export default function AssignedTasks() {
       try {
         setIsLoading(true);
         setError(null);
-        const [workspaceData, taskData] = await Promise.all([
-          getWorkspace(projectId),
-          listTasks(projectId, { status: statusFilter, assigneeId: user?.id }),
-        ]);
+        const workspaceData = (await listWorkspaces()).filter((workspace) => !workspace.is_archived);
+        const taskGroups = await Promise.all(
+          workspaceData.map(async (workspace) => {
+            const workspaceTasks = await listTasks(workspace.id, { assigneeId: user.id });
+            return workspaceTasks.map((task) => ({
+              ...task,
+              workspaceName: workspace.name,
+            }));
+          })
+        );
+
         if (isActive) {
-          setWorkspace(workspaceData);
-          setTasks(taskData);
+          setWorkspaces(workspaceData);
+          setTasks(taskGroups.flat());
+          if (projectId) {
+            setWorkspaceFilter(projectId);
+          }
         }
       } catch (err) {
-        const message = err instanceof Error ? err.message : "Failed to load workspace";
+        const message = err instanceof Error ? err.message : "Failed to load assigned tasks";
         if (isActive) {
           setError(message);
         }
@@ -67,11 +78,13 @@ export default function AssignedTasks() {
     return () => {
       isActive = false;
     };
-  }, [isAuthenticated, projectId, statusFilter, user?.id]);
+  }, [isAuthenticated, projectId, user?.id]);
 
   const taskRows = useMemo<TaskRowItem[]>(() => {
-    const projectName = workspace?.name ?? "Workspace";
-    return tasks.map((task) => {
+    return tasks
+      .filter((task) => !statusFilter || task.status === statusFilter)
+      .filter((task) => workspaceFilter === "all" || task.workspace_id === workspaceFilter)
+      .map((task) => {
       const assigneeNames = task.assignees?.map((entry) => entry.user.name).filter(Boolean) ?? [];
       const assignee = assigneeNames.length > 0 ? assigneeNames.join(", ") : "Unassigned";
       const due = task.deadline ? formatDueDate(task.deadline) : null;
@@ -82,21 +95,45 @@ export default function AssignedTasks() {
         dueDate: due ? due.text : "No deadline",
         dueUrgent: task.is_overdue,
         hasDeadline: Boolean(task.deadline),
-        project: projectName,
+        project: task.workspaceName,
         assignee,
+        workspaceId: task.workspace_id,
         isVerified: task.is_verified,
       };
     });
-  }, [tasks, workspace?.name]);
+  }, [statusFilter, tasks, workspaceFilter]);
 
-  const workspaceName = workspace?.name ?? "this workspace";
+  const selectedWorkspaceName = workspaces.find((workspace) => workspace.id === workspaceFilter)?.name;
+  const subtitle = selectedWorkspaceName
+    ? `Tasks assigned to you in ${selectedWorkspaceName}`
+    : "Tasks assigned to you across every workspace";
 
   return (
     <div className="pageStack">
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
         <h1 className="pageTitle">Assigned Tasks</h1>
-        <p className="pageSubtitle">Tasks for {workspaceName}</p>
+        <p className="pageSubtitle">{subtitle}</p>
       </motion.div>
+
+      <div className="filterBar">
+        <button
+          type="button"
+          onClick={() => setWorkspaceFilter("all")}
+          className={workspaceFilter === "all" ? "filterChip active" : "filterChip"}
+        >
+          All Workspaces
+        </button>
+        {workspaces.map((workspace) => (
+          <button
+            key={workspace.id}
+            type="button"
+            onClick={() => setWorkspaceFilter(workspace.id)}
+            className={workspaceFilter === workspace.id ? "filterChip active" : "filterChip"}
+          >
+            {workspace.name}
+          </button>
+        ))}
+      </div>
 
       <div className="filterBar">
         {FILTERS.map((f) => {
@@ -132,14 +169,14 @@ export default function AssignedTasks() {
           ) : taskRows.length === 0 ? (
             <div className="emptyState">
               <p className="emptyStateTitle">No tasks match this view</p>
-              <p className="emptyStateText">Assigned tasks will appear here as the workspace fills in.</p>
+              <p className="emptyStateText">Try another workspace or status filter.</p>
             </div>
           ) : (
             taskRows.map((task) => (
               <TaskRow
                 key={task.id}
                 task={task}
-                onClick={() => navigate(`/project/${projectId}/tasks/${task.id}`)}
+                onClick={() => navigate(`/project/${task.workspaceId}/tasks/${task.id}`)}
               />
             ))
           )}
