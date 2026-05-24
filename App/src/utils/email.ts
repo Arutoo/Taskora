@@ -1,25 +1,23 @@
-import * as Brevo from '@getbrevo/brevo';
+import { BrevoClient } from '@getbrevo/brevo';
 
-const FROM_EMAIL = process.env.EMAIL_FROM_ADDRESS ?? 'noreply@taskora.dev';
-const FROM_NAME  = process.env.EMAIL_FROM_NAME    ?? 'Taskora';
-const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN ?? 'http://localhost:3000';
+const FROM_EMAIL     = process.env.EMAIL_FROM_ADDRESS ?? 'noreply@taskora.dev';
+const FROM_NAME      = process.env.EMAIL_FROM_NAME    ?? 'Taskora';
+const CLIENT_ORIGIN  = process.env.CLIENT_ORIGIN      ?? 'http://localhost:3000';
 
-function getBrevoClient(): Brevo.TransactionalEmailsApi | null {
+function getClient(): BrevoClient | null {
   const apiKey = process.env.BREVO_API_KEY;
   if (!apiKey) return null;
-  const client = new Brevo.TransactionalEmailsApi();
-  client.setApiKey(Brevo.TransactionalEmailsApiApiKeys.apiKey, apiKey);
-  return client;
+  return new BrevoClient({ apiKey });
 }
 
 export async function sendNotificationEmail(email: string, message: string): Promise<void> {
-  const client = getBrevoClient();
+  const client = getClient();
   if (!client) {
     console.info(`[email skipped] Notification for ${email}: ${message}`);
     return;
   }
 
-  await client.sendTransacEmail({
+  await client.transactionalEmails.sendTransacEmail({
     sender: { email: FROM_EMAIL, name: FROM_NAME },
     to: [{ email }],
     subject: 'Taskora Notification',
@@ -31,14 +29,14 @@ export async function sendNotificationEmail(email: string, message: string): Pro
 }
 
 export async function sendVerificationEmail(email: string, token: string): Promise<void> {
-  const link = `${CLIENT_ORIGIN}/verify-email?token=${token}`;
-  const client = getBrevoClient();
+  const link   = `${CLIENT_ORIGIN}/verify-email?token=${token}`;
+  const client = getClient();
   if (!client) {
     console.info(`[email skipped] Verification link for ${email}: ${link}`);
     return;
   }
 
-  await client.sendTransacEmail({
+  await client.transactionalEmails.sendTransacEmail({
     sender: { email: FROM_EMAIL, name: FROM_NAME },
     to: [{ email }],
     subject: '✅ Verify your Taskora account',
