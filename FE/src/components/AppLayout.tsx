@@ -1,5 +1,5 @@
 import { NavLink, useLocation } from "react-router-dom";
-import { Activity, CircleUserRound, DoorOpen, FolderKanban, Home, ListChecks, LogOut, Plus, Sparkles, Sun, Moon } from "lucide-react";
+import { Activity, ChevronDown, CircleUserRound, DoorOpen, Home, ListChecks, LogOut, Plus, Sparkles, Sun, Moon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { listWorkspaces } from "../lib/api/workspaces";
@@ -20,6 +20,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
   const [workspaces, setWorkspaces] = useState<ApiWorkspace[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [expandedWorkspaceId, setExpandedWorkspaceId] = useState<string | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const { theme, toggleTheme } = useTheme();
   const workspaceIds = useMemo(() => workspaces.map((workspace) => workspace.id), [workspaces]);
@@ -99,8 +100,13 @@ export default function AppLayout({ children }: AppLayoutProps) {
     };
   }, [accessToken, isAuthenticated, workspaceIds, workspaceIdsKey]);
 
-  const routeMatch = location.pathname.match(/^\/project\/([^/]+)/);
-  const activeWorkspaceId = routeMatch?.[1] ?? workspaces[0]?.id;
+  const routeWorkspaceId = location.pathname.match(/^\/project\/([^/]+)/)?.[1];
+  useEffect(() => {
+    if (routeWorkspaceId) {
+      setExpandedWorkspaceId(routeWorkspaceId);
+    }
+  }, [routeWorkspaceId]);
+
   const handleLogout = () => {
     void logout();
   };
@@ -153,16 +159,33 @@ export default function AppLayout({ children }: AppLayoutProps) {
             </NavLink>
           </div>
           <div className="navSection">
-            {workspaces.map((workspace) => (
-              <NavLink
-                key={workspace.id}
-                to={`/project/${workspace.id}`}
-                className={({ isActive }) => (isActive ? "navItem active" : "navItem")}
-              >
-                <span className="projectDot" style={{ backgroundColor: colorFromName(workspace.name) }} />
-                <span className="navLabel">{workspace.name}</span>
-              </NavLink>
-            ))}
+            {workspaces.map((workspace) => {
+              const isExpanded = expandedWorkspaceId === workspace.id;
+              return (
+                <div className="projectNavGroup" key={workspace.id}>
+                  <NavLink
+                    to={`/project/${workspace.id}`}
+                    className={({ isActive }) => (isActive ? "navItem projectNavItem active" : "navItem projectNavItem")}
+                    onClick={() => setExpandedWorkspaceId(workspace.id)}
+                  >
+                    <span className="projectDot" style={{ backgroundColor: colorFromName(workspace.name) }} />
+                    <span className="navLabel">{workspace.name}</span>
+                    <ChevronDown className={isExpanded ? "projectNavChevron expanded" : "projectNavChevron"} />
+                  </NavLink>
+                  {isExpanded ? (
+                    <div className="projectSubnav">
+                      <NavLink
+                        to={`/project/${workspace.id}/activity`}
+                        className={({ isActive }) => (isActive ? "projectSubnavItem active" : "projectSubnavItem")}
+                      >
+                        <Activity size={15} />
+                        <span className="navLabel">Activity Log</span>
+                      </NavLink>
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
             {isLoading ? (
               <div className="skeletonStack" aria-label="Loading projects">
                 <div className="skeletonLine" />
@@ -184,29 +207,13 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
           <div className="navSectionTitle">Workspace</div>
           <div className="navSection">
-            {activeWorkspaceId ? (
-              <>
-                <NavLink
-                  to={`/project/${activeWorkspaceId}/tasks`}
-                  className={({ isActive }) => (isActive ? "navItem active" : "navItem")}
-                >
-                  <ListChecks className="navItemIcon" />
-                  <span className="navLabel">Assigned Tasks</span>
-                </NavLink>
-                <NavLink
-                  to={`/project/${activeWorkspaceId}/activity`}
-                  className={({ isActive }) => (isActive ? "navItem active" : "navItem")}
-                >
-                  <Activity className="navItemIcon" />
-                  <span className="navLabel">Activity Log</span>
-                </NavLink>
-              </>
-            ) : (
-              <div className="navItem" style={{ opacity: 0.6, cursor: "not-allowed" }}>
-                <FolderKanban className="navItemIcon" />
-                <span className="navLabel">Assigned Tasks</span>
-              </div>
-            )}
+            <NavLink
+              to="/tasks"
+              className={({ isActive }) => (isActive ? "navItem active" : "navItem")}
+            >
+              <ListChecks className="navItemIcon" />
+              <span className="navLabel">Assigned Tasks</span>
+            </NavLink>
           </div>
           <div className="navSection accountSection">
             <div className="navSectionTitle">Account</div>

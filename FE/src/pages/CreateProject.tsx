@@ -31,10 +31,12 @@ export default function CreateProject() {
   const [isLookingUpMember, setIsLookingUpMember] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [shouldGenerateToken, setShouldGenerateToken] = useState(false);
-  const [inviteToken, setInviteToken] = useState<string | null>(null);
+  const [shouldGenerateCode, setShouldGenerateCode] = useState(false);
+  const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [codeError, setCodeError] = useState<string | null>(null);
   const submitLock = useRef(false);
+
+  const inviteLink = inviteCode ? `${window.location.origin}/join?code=${encodeURIComponent(inviteCode)}` : "";
 
   const resultLabel = useMemo(() => {
     if (!memberEmail.trim()) return "";
@@ -114,15 +116,15 @@ export default function CreateProject() {
       }
 
       let code: string | null = null;
-      if (shouldGenerateToken) {
-        const { inviteToken } = await createInviteLink(workspace.id);
-        code = inviteToken;
-        setInviteToken(code);
+      if (shouldGenerateCode) {
+        const { inviteCode } = await createInviteLink(workspace.id);
+        code = inviteCode;
+        setInviteCode(code);
       }
 
       navigate(`/project/${workspace.id}`, {
         replace: true,
-        state: code || inviteWarning ? { inviteToken: code ?? undefined, inviteWarning: inviteWarning ?? undefined } : undefined,
+        state: code || inviteWarning ? { inviteCode: code ?? undefined, inviteWarning: inviteWarning ?? undefined } : undefined,
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to create workspace";
@@ -134,12 +136,12 @@ export default function CreateProject() {
   };
 
   const handleCopyLink = async () => {
-    if (!inviteToken) return;
+    if (!inviteLink) return;
     try {
-      await navigator.clipboard.writeText(inviteToken);
+      await navigator.clipboard.writeText(inviteLink);
       setCodeError(null);
     } catch {
-      setCodeError("Failed to copy code. Please copy it manually.");
+      setCodeError("Failed to copy link. Please copy it manually.");
     }
   };
 
@@ -244,20 +246,21 @@ export default function CreateProject() {
           </div>
 
           <div className="formField">
-            <span className="formLabel">Invite Token</span>
+            <span className="formLabel">Invite Code</span>
             <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--c-muted-foreground)" }}>
               <input
                 type="checkbox"
-                checked={shouldGenerateToken}
-                onChange={(event) => setShouldGenerateToken(event.target.checked)}
+                checked={shouldGenerateCode}
+                onChange={(event) => setShouldGenerateCode(event.target.checked)}
               />
-              Generate an invite token after creating the project
+              Generate an invite code and shareable link after creating the project
             </label>
-            {inviteToken ? (
-              <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
-                <input className="formInput font-mono" value={inviteToken} readOnly />
+            {inviteCode ? (
+              <div style={{ display: "grid", gap: 8, marginTop: 12 }}>
+                <input className="formInput font-mono" value={inviteCode} readOnly />
+                <input className="formInput font-mono" value={inviteLink} readOnly />
                 <button className="ghostBtn" type="button" onClick={handleCopyLink}>
-                  Copy token
+                  Copy link
                 </button>
               </div>
             ) : null}
@@ -269,7 +272,7 @@ export default function CreateProject() {
               Cancel
             </button>
             <button className="primaryBtn" type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "Creating..." : shouldGenerateToken ? "Create & generate token" : "Create Project"}
+              {isSubmitting ? "Creating..." : shouldGenerateCode ? "Create & generate code" : "Create Project"}
             </button>
           </div>
           {error ? <p className="muted" style={{ margin: "12px 0 0" }}>{error}</p> : null}

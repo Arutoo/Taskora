@@ -49,7 +49,7 @@ export async function inviteToWorkspace(workspaceId: string, email: string) {
 }
 
 export function createInviteLink(workspaceId: string) {
-  return apiRequest<{ inviteToken: string }>(
+  return apiRequest<{ inviteCode: string }>(
     `/workspaces/${workspaceId}/invite`,
     {
       method: "POST",
@@ -59,19 +59,19 @@ export function createInviteLink(workspaceId: string) {
   );
 }
 
-export function joinWorkspace(workspaceId: string, token: string) {
+export function joinWorkspace(workspaceId: string, code: string) {
   return apiRequest<ApiWorkspace>(
     `/workspaces/${workspaceId}/join`,
     {
       method: "POST",
-      body: JSON.stringify({ token }),
+      body: JSON.stringify({ code }),
     },
     { auth: true }
   );
 }
 
-export function joinWorkspaceWithToken(token: string) {
-  return joinWorkspace("invite", token);
+export function joinWorkspaceWithCode(code: string) {
+  return joinWorkspace("invite", code);
 }
 
 export function archiveWorkspace(workspaceId: string) {
@@ -89,6 +89,28 @@ export function removeMember(workspaceId: string, userId: string) {
     `/workspaces/${workspaceId}/members/${userId}`,
     {
       method: "DELETE",
+    },
+    { auth: true }
+  );
+}
+
+export function leaveWorkspace(workspaceId: string) {
+  return apiRequest<null>(
+    `/workspaces/${workspaceId}/leave`,
+    {
+      method: "POST",
+      body: JSON.stringify({}),
+    },
+    { auth: true }
+  );
+}
+
+export function transferWorkspaceOwnership(workspaceId: string, newLeaderId: string) {
+  return apiRequest<{ message: string }>(
+    `/workspaces/${workspaceId}/transfer`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ newLeaderId }),
     },
     { auth: true }
   );

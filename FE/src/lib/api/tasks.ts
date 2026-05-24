@@ -125,6 +125,17 @@ export function verifyTask(workspaceId: string, taskId: string) {
   );
 }
 
+export function unverifyTask(workspaceId: string, taskId: string) {
+  return apiRequest<ApiTask>(
+    `/workspaces/${workspaceId}/tasks/${taskId}/unverify`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({}),
+    },
+    { auth: true }
+  );
+}
+
 export function deleteTask(workspaceId: string, taskId: string) {
   return apiRequest<null>(
     `/workspaces/${workspaceId}/tasks/${taskId}`,

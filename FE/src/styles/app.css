@@ -276,6 +276,49 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .navItemIcon { width: 18px; height: 18px; flex: 0 0 auto; }
 .navLabel { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .projectDot, .statusDot { width: 9px; height: 9px; border-radius: 999px; display: inline-block; flex: 0 0 auto; }
+.projectNavGroup { display: grid; gap: 5px; }
+.projectNavItem { width: 100%; }
+.projectNavChevron {
+  width: 15px;
+  height: 15px;
+  margin-left: auto;
+  color: var(--c-muted-foreground);
+  transition: transform 180ms ease, color 180ms ease;
+}
+.projectNavItem:hover .projectNavChevron,
+.projectNavItem.active .projectNavChevron {
+  color: var(--c-foreground);
+}
+.projectNavChevron.expanded { transform: rotate(180deg); }
+.projectSubnav {
+  display: grid;
+  gap: 5px;
+  padding: 0 0 2px 28px;
+}
+.projectSubnavItem {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 34px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  color: var(--c-muted-foreground);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 750;
+  transition: background 180ms ease, color 180ms ease, border-color 180ms ease, transform 180ms ease;
+}
+.projectSubnavItem:hover {
+  color: var(--c-foreground);
+  background: color-mix(in srgb, var(--c-secondary) 64%, transparent);
+  transform: translateX(2px);
+}
+.projectSubnavItem.active {
+  color: var(--c-foreground);
+  background: color-mix(in srgb, var(--c-primary) 13%, transparent);
+  border-color: color-mix(in srgb, var(--c-primary) 28%, transparent);
+}
 
 .main { padding: 30px; }
 .pageContainer { max-width: 1360px; width: 100%; margin: 0 auto; }
@@ -1256,6 +1299,111 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .authButton { width: 100%; margin-top: 6px; padding: 13px 16px; font-size: 16px; }
 .authAlt { margin: 18px 0 0; font-size: 12px; color: var(--c-muted-foreground); text-align: center; }
 .authAlt a { color: var(--c-foreground); text-decoration: none; border-bottom: 1px solid color-mix(in srgb, var(--c-foreground) 45%, transparent); }
+
+.verifyEmailOverlay { padding: 18px; }
+.verifyEmailDialog {
+  width: min(430px, 94vw);
+  position: relative;
+  padding: 28px;
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--c-card) 96%, transparent);
+  border: 1px solid color-mix(in srgb, var(--c-border) 72%, transparent);
+  box-shadow: 0 26px 70px rgba(0, 0, 0, 0.34), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+.verifyEmailClose {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--c-border) 60%, transparent);
+  background: color-mix(in srgb, var(--c-secondary) 42%, transparent);
+  color: var(--c-foreground);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: transform 0.18s ease, background 0.18s ease;
+}
+.verifyEmailClose:hover { background: color-mix(in srgb, var(--c-secondary) 72%, transparent); }
+.verifyEmailClose:active { transform: translateY(1px) scale(0.98); }
+.verifyEmailIcon {
+  width: 54px;
+  height: 54px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  color: var(--c-primary);
+  background: color-mix(in srgb, var(--c-primary) 13%, transparent);
+  border: 1px solid color-mix(in srgb, var(--c-primary) 24%, transparent);
+}
+.verifyEmailIconSuccess {
+  color: var(--c-success);
+  background: color-mix(in srgb, var(--c-success) 13%, transparent);
+  border-color: color-mix(in srgb, var(--c-success) 24%, transparent);
+}
+.verifyEmailIconWarning {
+  color: var(--c-accent-2);
+  background: color-mix(in srgb, var(--c-accent-2) 12%, transparent);
+  border-color: color-mix(in srgb, var(--c-accent-2) 22%, transparent);
+}
+.verifyEmailKicker {
+  margin: 18px 0 0;
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--c-muted-foreground);
+}
+.verifyEmailTitle {
+  margin: 8px 0 8px;
+  font-size: 28px;
+  line-height: 1.05;
+  letter-spacing: 0;
+}
+.verifyEmailText {
+  margin: 0;
+  color: var(--c-muted-foreground);
+  font-size: 14px;
+  line-height: 1.55;
+}
+.verifyEmailText strong {
+  color: var(--c-foreground);
+  overflow-wrap: anywhere;
+}
+.verifyEmailAction {
+  width: 100%;
+  margin-top: 22px;
+  padding: 13px 16px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--c-primary) 46%, transparent);
+  background: var(--c-primary);
+  color: var(--c-primary-foreground);
+  font-weight: 850;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  cursor: pointer;
+  transition: transform 0.18s ease, filter 0.18s ease;
+}
+.verifyEmailAction:hover { filter: brightness(1.04); }
+.verifyEmailAction:active { transform: translateY(1px) scale(0.99); }
+.verifyEmailStatus {
+  margin: 12px 0 0;
+  color: var(--c-muted-foreground);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.verifyResultCard { text-align: left; }
+.verifyResultCard .verifyEmailIcon { margin-bottom: 18px; }
+.verifyResultButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+.successText { color: color-mix(in srgb, var(--c-success) 88%, white 8%); }
 
 @media (max-width: 900px) {
   .appShell { grid-template-columns: 1fr; }

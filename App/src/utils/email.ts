@@ -1,10 +1,21 @@
 import { Resend } from 'resend';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
 const FROM = process.env.EMAIL_FROM ?? 'Taskora <noreply@taskora.dev>';
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN ?? 'http://localhost:3000';
 
+function getResendClient(): Resend | null {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) return null;
+  return new Resend(apiKey);
+}
+
 export async function sendNotificationEmail(email: string, message: string): Promise<void> {
+  const resend = getResendClient();
+  if (!resend) {
+    console.info(`[email skipped] Notification for ${email}: ${message}`);
+    return;
+  }
+
   await resend.emails.send({
     from: FROM,
     to: email,
@@ -18,6 +29,11 @@ export async function sendNotificationEmail(email: string, message: string): Pro
 
 export async function sendVerificationEmail(email: string, token: string): Promise<void> {
   const link = `${CLIENT_ORIGIN}/verify-email?token=${token}`;
+  const resend = getResendClient();
+  if (!resend) {
+    console.info(`[email skipped] Verification link for ${email}: ${link}`);
+    return;
+  }
 
   await resend.emails.send({
     from: FROM,

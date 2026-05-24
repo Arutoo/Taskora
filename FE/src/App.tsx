@@ -6,6 +6,7 @@ import Dashboard from "./pages/Dashboard";
 import NotFound from "./pages/NotFound";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
+import VerifyEmail from "./pages/VerifyEmail";
 import CreateProject from "./pages/CreateProject";
 import ProjectDashboard from "./pages/ProjectDashboard";
 import AssignedTasks from "./pages/AssignedTasks";
@@ -42,11 +43,13 @@ export default function App() {
             <Routes>
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
+              <Route path="/verify-email" element={<VerifyEmail />} />
 
               <Route element={<ProtectedLayout />}>
                 <Route path="/" element={<Dashboard />} />
                 <Route path="/project/new" element={<CreateProject />} />
                 <Route path="/project/:id" element={<ProjectDashboard />} />
+                <Route path="/tasks" element={<AssignedTasks />} />
                 <Route path="/project/:projectId/tasks" element={<AssignedTasks />} />
                 <Route path="/project/:projectId/tasks/:taskId" element={<TaskPage />} />
                 <Route path="/project/:projectId/activity" element={<WorkspaceActivity />} />

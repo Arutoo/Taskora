@@ -126,6 +126,7 @@ export type ApiActivityLog = {
     | "task_created"
     | "status_changed"
     | "task_verified"
+    | "task_unverified"
     | "member_joined"
     | "shortcut_added"
     | "comment_added";
