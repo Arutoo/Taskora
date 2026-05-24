@@ -25,6 +25,41 @@ type UpdateTaskPayload = {
   assigneeIds?: string[];
 };
 
+const DATE_REQUIRED_MESSAGE = "Start date and due date are required.";
+const DATE_ORDER_MESSAGE = "Due date cannot be before the start date.";
+const DATE_PAST_MESSAGE = "Start date and due date cannot be before today.";
+
+function dateOnlyTimestamp(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return Number.NaN;
+  return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+}
+
+function todayTimestamp() {
+  const now = new Date();
+  return Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+}
+
+function validateTaskDates(startDate?: string | null, deadline?: string | null, rejectPast = false) {
+  if (!startDate || !deadline) {
+    throw new Error(DATE_REQUIRED_MESSAGE);
+  }
+
+  const start = dateOnlyTimestamp(startDate);
+  const due = dateOnlyTimestamp(deadline);
+  if (!Number.isFinite(start) || !Number.isFinite(due)) {
+    throw new Error(DATE_REQUIRED_MESSAGE);
+  }
+
+  if (due < start) {
+    throw new Error(DATE_ORDER_MESSAGE);
+  }
+
+  if (rejectPast && (start < todayTimestamp() || due < todayTimestamp())) {
+    throw new Error(DATE_PAST_MESSAGE);
+  }
+}
+
 export function listTasks(workspaceId: string, filters: ListTasksFilters = {}) {
   const params = new URLSearchParams();
   if (filters.status) params.set("status", filters.status);
@@ -41,6 +76,8 @@ export function getTask(workspaceId: string, taskId: string) {
 }
 
 export function createTask(workspaceId: string, payload: CreateTaskPayload) {
+  validateTaskDates(payload.start_date, payload.deadline, true);
+
   return apiRequest<ApiTask>(
     `/workspaces/${workspaceId}/tasks`,
     {
@@ -52,6 +89,10 @@ export function createTask(workspaceId: string, payload: CreateTaskPayload) {
 }
 
 export function updateTask(workspaceId: string, taskId: string, payload: UpdateTaskPayload) {
+  if ("start_date" in payload || "deadline" in payload) {
+    validateTaskDates(payload.start_date, payload.deadline);
+  }
+
   return apiRequest<ApiTask>(
     `/workspaces/${workspaceId}/tasks/${taskId}`,
     {

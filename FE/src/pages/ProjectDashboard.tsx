@@ -1,6 +1,6 @@
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import { CalendarDays, ExternalLink, Link2, Plus, Sparkles, Trash2 } from "lucide-react";
+import { CalendarDays, ExternalLink, Link2, LogOut, Plus, Sparkles, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import CalendarWidget from "../components/CalendarWidget";
 import TaskRow from "../components/TaskRow";
@@ -49,6 +49,13 @@ function describeArc(cx: number, cy: number, radius: number, startAngle: number,
   return `M ${start.x} ${start.y} A ${radius} ${radius} 0 ${largeArcFlag} 0 ${end.x} ${end.y}`;
 }
 
+function localDateInputValue(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 export default function ProjectDashboard() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -84,6 +91,9 @@ export default function ProjectDashboard() {
   const [shortcutError, setShortcutError] = useState<string | null>(null);
   const [isCreatingShortcut, setIsCreatingShortcut] = useState(false);
   const [deletingShortcutId, setDeletingShortcutId] = useState<string | null>(null);
+  const [leaveError, setLeaveError] = useState<string | null>(null);
+  const [isLeavingWorkspace, setIsLeavingWorkspace] = useState(false);
+  const todayInputValue = useMemo(() => localDateInputValue(), []);
 
   useEffect(() => {
     if (!isAuthenticated || !id) {
@@ -135,6 +145,8 @@ export default function ProjectDashboard() {
 
   const currentMember = workspace?.members?.find((member) => member.user.id === user?.id);
   const isLeader = currentMember?.role === "leader";
+  const leaderCount = workspace?.members?.filter((member) => member.role === "leader").length ?? 0;
+  const isSoleLeader = isLeader && leaderCount <= 1;
 
   const deadlines = useMemo<DashboardDeadline[]>(() => {
     return calendarTasks.flatMap((task) => {
@@ -295,6 +307,29 @@ export default function ProjectDashboard() {
     );
   };
 
+  const handleTaskStartDateChange = (value: string) => {
+    setTaskStartDate(value);
+    if (value && taskDeadline && taskDeadline < value) {
+      setTaskDeadline(value);
+    }
+    if (value && value < todayInputValue) {
+      setTaskError("Start date and due date cannot be before today.");
+    } else {
+      setTaskError(null);
+    }
+  };
+
+  const handleTaskDeadlineChange = (value: string) => {
+    setTaskDeadline(value);
+    if (value && value < todayInputValue) {
+      setTaskError("Start date and due date cannot be before today.");
+    } else if (taskStartDate && value && value < taskStartDate) {
+      setTaskError("Due date cannot be before the start date.");
+    } else {
+      setTaskError(null);
+    }
+  };
+
   const handleCreateTask = async () => {
     if (!id || !isLeader || isCreatingTask) return;
     const title = taskTitle.trim();
@@ -304,6 +339,18 @@ export default function ProjectDashboard() {
     }
     if (assigneeIds.length === 0) {
       setTaskError("Select at least one assignee.");
+      return;
+    }
+    if (!taskStartDate || !taskDeadline) {
+      setTaskError("Start date and due date are required.");
+      return;
+    }
+    if (taskStartDate < todayInputValue || taskDeadline < todayInputValue) {
+      setTaskError("Start date and due date cannot be before today.");
+      return;
+    }
+    if (taskDeadline < taskStartDate) {
+      setTaskError("Due date cannot be before the start date.");
       return;
     }
 
@@ -423,6 +470,27 @@ export default function ProjectDashboard() {
       setInviteTokenError(null);
     } catch {
       setInviteTokenError("Failed to copy token. Please copy it manually.");
+    }
+  };
+
+  const handleLeaveWorkspace = async () => {
+    if (!id || !user || !currentMember || isLeavingWorkspace) return;
+    setLeaveError(null);
+
+    const confirmed = window.confirm("Leave this workspace? You will lose access to its tasks and activity.");
+    if (!confirmed) return;
+
+    try {
+      setIsLeavingWorkspace(true);
+      await removeMember(id, currentMember.user.id);
+      navigate("/", { replace: true });
+    } catch (err) {
+      const message = err instanceof ApiError && (err.status === 400 || err.status === 403)
+        ? "The current API only allows leaders to remove members. Leaving as a member needs backend support for self-removal."
+        : err instanceof Error ? err.message : "Failed to leave workspace";
+      setLeaveError(message);
+    } finally {
+      setIsLeavingWorkspace(false);
     }
   };
 
@@ -609,7 +677,7 @@ export default function ProjectDashboard() {
                         {member.verified_tasks}
                       </td>
                       <td className="tableNumber" style={{ color: "var(--c-muted-foreground)" }}>
-                        {member.percentage.toFixed(2)}%
+                        {Math.round(member.percentage)}%
                       </td>
                     </tr>
                   );
@@ -690,6 +758,39 @@ export default function ProjectDashboard() {
             ) : (
               <p className="muted" style={{ margin: 0 }}>No description yet.</p>
             )}
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.23 }}
+            className="card cardPad4 workspaceSettingsCard"
+          >
+            <div className="sectionHeaderRow">
+              <div>
+                <h3 className="sectionTitle">Workspace Settings</h3>
+                <p className="muted" style={{ margin: "4px 0 0", fontSize: 13 }}>
+                  Membership controls for this workspace.
+                </p>
+              </div>
+              <LogOut size={18} className="muted" />
+            </div>
+
+            <button
+              className="dangerBtn"
+              type="button"
+              onClick={handleLeaveWorkspace}
+              disabled={isLeavingWorkspace}
+            >
+              <LogOut size={15} />
+              {isLeavingWorkspace ? "Leaving..." : "Leave Workspace"}
+            </button>
+            {isSoleLeader ? (
+              <p className="emptyStateText" style={{ margin: "10px 0 0" }}>
+                Sole leaders must transfer ownership before leaving.
+              </p>
+            ) : null}
+            {leaveError ? <p className="emptyStateText errorText" style={{ margin: "10px 0 0" }}>{leaveError}</p> : null}
           </motion.div>
 
           <motion.div
@@ -817,25 +918,29 @@ export default function ProjectDashboard() {
                   </select>
                 </label>
                 <label className="formField" style={{ margin: 0 }}>
-                  <span className="formLabel">Start date</span>
+                  <span className="formLabel requiredLabel">Start date</span>
                   <span className="dateInputShell">
                     <input
                       className="formInput"
                       type="date"
+                      required
+                      min={todayInputValue}
                       value={taskStartDate}
-                      onChange={(event) => setTaskStartDate(event.target.value)}
+                      onChange={(event) => handleTaskStartDateChange(event.target.value)}
                     />
                     <CalendarDays className="dateInputIcon" size={18} />
                   </span>
                 </label>
                 <label className="formField" style={{ margin: 0 }}>
-                  <span className="formLabel">Deadline</span>
+                  <span className="formLabel requiredLabel">Deadline</span>
                   <span className="dateInputShell">
                     <input
                       className="formInput"
                       type="date"
+                      required
+                      min={taskStartDate || todayInputValue}
                       value={taskDeadline}
-                      onChange={(event) => setTaskDeadline(event.target.value)}
+                      onChange={(event) => handleTaskDeadlineChange(event.target.value)}
                     />
                     <CalendarDays className="dateInputIcon" size={18} />
                   </span>
@@ -870,6 +975,7 @@ export default function ProjectDashboard() {
           </div>
         </div>
       ) : null}
+
     </div>
   );
 }

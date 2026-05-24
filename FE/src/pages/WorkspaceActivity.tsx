@@ -19,6 +19,15 @@ const actionLabels: Record<ApiActivityLog["action_type"], string> = {
   comment_added: "added a comment",
 };
 
+const actionMarkerClasses: Record<ApiActivityLog["action_type"], string> = {
+  task_created: "activityMarker taskCreated",
+  status_changed: "activityMarker statusChanged",
+  task_verified: "activityMarker taskVerified",
+  member_joined: "activityMarker memberJoined",
+  shortcut_added: "activityMarker shortcutAdded",
+  comment_added: "activityMarker commentAdded",
+};
+
 export default function WorkspaceActivity() {
   const { projectId } = useParams<{ projectId: string }>();
   const { isAuthenticated } = useAuth();
@@ -108,12 +117,13 @@ export default function WorkspaceActivity() {
           <div className="activityList">
             {activity.items.map((item) => (
               <div className="activityItem" key={item.id}>
-                <div className="activityMarker" />
+                <div className={actionMarkerClasses[item.action_type]} />
                 <div>
                   <p className="activityText">
                     <strong>{item.user?.name ?? "A member"}</strong> {actionLabels[item.action_type]}
                   </p>
                   <p className="activityMeta">
+                    {workspace?.name ? <span className="activityProjectLabel">{workspace.name}</span> : null}
                     {formatDate(item.created_at)}
                     {item.reference_type ? ` - ${item.reference_type}` : ""}
                   </p>

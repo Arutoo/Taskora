@@ -84,6 +84,7 @@ export default function AssignedTasks() {
         hasDeadline: Boolean(task.deadline),
         project: projectName,
         assignee,
+        isVerified: task.is_verified,
       };
     });
   }, [tasks, workspace?.name]);

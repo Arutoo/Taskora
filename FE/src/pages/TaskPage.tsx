@@ -1,6 +1,6 @@
 import { useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowLeft, CalendarDays, CheckCircle, MessageSquare, Pencil, Reply, Trash2, X } from "lucide-react";
+import { ArrowLeft, CalendarDays, CheckCircle, MessageSquare, Pencil, Reply, RotateCcw, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { getTask, updateTask, updateTaskStatus, verifyTask } from "../lib/api/tasks";
 import type { ApiComment, ApiTask, ApiTaskPriority, ApiTaskStatus, ApiWorkspace } from "../lib/api/types";
@@ -159,6 +159,13 @@ export default function TaskPage() {
     }
   };
 
+  const handleUnverifyTask = () => {
+    if (!isLeader || !task?.is_verified) return;
+    const confirmed = window.confirm("Unverify this task and allow status updates again?");
+    if (!confirmed) return;
+    setVerifyError("Unverify requires backend support. The current API only supports verifying tasks.");
+  };
+
   const openEditModal = () => {
     if (!task) return;
     setEditTitle(task.title);
@@ -182,6 +189,13 @@ export default function TaskPage() {
     );
   };
 
+  const handleEditStartDateChange = (value: string) => {
+    setEditStartDate(value);
+    if (value && editDeadline && editDeadline < value) {
+      setEditDeadline(value);
+    }
+  };
+
   const handleSaveEdit = async () => {
     if (!projectId || !taskId || !task || isSavingEdit) return;
     const title = editTitle.trim();
@@ -193,6 +207,14 @@ export default function TaskPage() {
       setEditError("Select at least one assignee.");
       return;
     }
+    if (!editStartDate || !editDeadline) {
+      setEditError("Start date and due date are required.");
+      return;
+    }
+    if (editDeadline < editStartDate) {
+      setEditError("Due date cannot be before the start date.");
+      return;
+    }
 
     try {
       setIsSavingEdit(true);
@@ -201,8 +223,8 @@ export default function TaskPage() {
         title,
         description: editDescription.trim(),
         priority: editPriority,
-        start_date: editStartDate ? new Date(editStartDate).toISOString() : null,
-        deadline: editDeadline ? new Date(editDeadline).toISOString() : null,
+        start_date: new Date(editStartDate).toISOString(),
+        deadline: new Date(editDeadline).toISOString(),
         assigneeIds: editAssigneeIds,
       });
       setTask(updated);
@@ -479,6 +501,16 @@ export default function TaskPage() {
                     <CheckCircle size={16} />
                     {task.is_verified ? "Verified" : isVerifying ? "Verifying..." : "Mark complete"}
                   </button>
+                  {task.is_verified ? (
+                    <button
+                      className="ghostBtn"
+                      type="button"
+                      onClick={handleUnverifyTask}
+                    >
+                      <RotateCcw size={16} />
+                      Unverify
+                    </button>
+                  ) : null}
                 </div>
               ) : null}
             </div>
@@ -695,23 +727,26 @@ export default function TaskPage() {
                   </select>
                 </label>
                 <label className="formField">
-                  <span className="formLabel">Start date</span>
+                  <span className="formLabel requiredLabel">Start date</span>
                   <span className="dateInputShell">
                     <input
                       className="formInput"
                       type="date"
+                      required
                       value={editStartDate}
-                      onChange={(event) => setEditStartDate(event.target.value)}
+                      onChange={(event) => handleEditStartDateChange(event.target.value)}
                     />
                     <CalendarDays className="dateInputIcon" size={18} />
                   </span>
                 </label>
                 <label className="formField">
-                  <span className="formLabel">Deadline</span>
+                  <span className="formLabel requiredLabel">Deadline</span>
                   <span className="dateInputShell">
                     <input
                       className="formInput"
                       type="date"
+                      required
+                      min={editStartDate || undefined}
                       value={editDeadline}
                       onChange={(event) => setEditDeadline(event.target.value)}
                     />

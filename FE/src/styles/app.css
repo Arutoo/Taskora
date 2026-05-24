@@ -199,6 +199,47 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .navSectionHeader .navSectionTitle { margin-top: 0; }
 .navSection { display: flex; flex-direction: column; gap: 6px; }
 .accountSection { margin-top: auto; }
+.sidebarProfile {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  padding: 11px 12px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--c-border) 66%, transparent);
+  background: color-mix(in srgb, var(--c-secondary) 42%, transparent);
+}
+.sidebarProfileIcon {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  color: var(--c-muted-foreground);
+  background: color-mix(in srgb, var(--c-background) 34%, transparent);
+  border: 1px solid color-mix(in srgb, var(--c-border) 58%, transparent);
+}
+.sidebarProfileText {
+  min-width: 0;
+}
+.sidebarProfileName,
+.sidebarProfileEmail {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sidebarProfileName {
+  color: var(--c-foreground);
+  font-size: 14px;
+  font-weight: 850;
+}
+.sidebarProfileEmail {
+  margin-top: 3px;
+  color: var(--c-muted-foreground);
+  font-size: 12px;
+  font-weight: 650;
+}
 .navItem {
   display: flex;
   align-items: center;

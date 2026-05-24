@@ -1,5 +1,5 @@
 import { NavLink, useLocation } from "react-router-dom";
-import { Activity, DoorOpen, FolderKanban, Home, ListChecks, LogOut, Plus, Sparkles, Sun, Moon } from "lucide-react";
+import { Activity, CircleUserRound, DoorOpen, FolderKanban, Home, ListChecks, LogOut, Plus, Sparkles, Sun, Moon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { listWorkspaces } from "../lib/api/workspaces";
@@ -15,7 +15,7 @@ type AppLayoutProps = {
 };
 
 export default function AppLayout({ children }: AppLayoutProps) {
-  const { accessToken, isAuthenticated, logout } = useAuth();
+  const { accessToken, isAuthenticated, logout, user } = useAuth();
   const location = useLocation();
   const [workspaces, setWorkspaces] = useState<ApiWorkspace[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -210,6 +210,15 @@ export default function AppLayout({ children }: AppLayoutProps) {
           </div>
           <div className="navSection accountSection">
             <div className="navSectionTitle">Account</div>
+            <div className="sidebarProfile" aria-label="Signed-in profile">
+              <div className="sidebarProfileIcon" aria-hidden="true">
+                <CircleUserRound size={24} />
+              </div>
+              <div className="sidebarProfileText">
+                <div className="sidebarProfileName">{user?.name ?? "No profile name"}</div>
+                <div className="sidebarProfileEmail">{user?.email ?? "No email available"}</div>
+              </div>
+            </div>
             <button className="navItem navItemButton" type="button" onClick={handleLogout}>
               <LogOut className="navItemIcon" />
               <span className="navLabel">Sign out</span>
