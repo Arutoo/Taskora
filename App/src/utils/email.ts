@@ -1,26 +1,29 @@
-import { Resend } from 'resend';
+import * as Brevo from '@getbrevo/brevo';
 
-const FROM = process.env.EMAIL_FROM ?? 'Taskora <noreply@taskora.dev>';
+const FROM_EMAIL = process.env.EMAIL_FROM_ADDRESS ?? 'noreply@taskora.dev';
+const FROM_NAME  = process.env.EMAIL_FROM_NAME    ?? 'Taskora';
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN ?? 'http://localhost:3000';
 
-function getResendClient(): Resend | null {
-  const apiKey = process.env.RESEND_API_KEY;
+function getBrevoClient(): Brevo.TransactionalEmailsApi | null {
+  const apiKey = process.env.BREVO_API_KEY;
   if (!apiKey) return null;
-  return new Resend(apiKey);
+  const client = new Brevo.TransactionalEmailsApi();
+  client.setApiKey(Brevo.TransactionalEmailsApiApiKeys.apiKey, apiKey);
+  return client;
 }
 
 export async function sendNotificationEmail(email: string, message: string): Promise<void> {
-  const resend = getResendClient();
-  if (!resend) {
+  const client = getBrevoClient();
+  if (!client) {
     console.info(`[email skipped] Notification for ${email}: ${message}`);
     return;
   }
 
-  await resend.emails.send({
-    from: FROM,
-    to: email,
+  await client.sendTransacEmail({
+    sender: { email: FROM_EMAIL, name: FROM_NAME },
+    to: [{ email }],
     subject: 'Taskora Notification',
-    html: `
+    htmlContent: `
       <p>${message}</p>
       <p style="color:#6B7280;font-size:12px;">Log in to Taskora to view details.</p>
     `,
@@ -29,17 +32,17 @@ export async function sendNotificationEmail(email: string, message: string): Pro
 
 export async function sendVerificationEmail(email: string, token: string): Promise<void> {
   const link = `${CLIENT_ORIGIN}/verify-email?token=${token}`;
-  const resend = getResendClient();
-  if (!resend) {
+  const client = getBrevoClient();
+  if (!client) {
     console.info(`[email skipped] Verification link for ${email}: ${link}`);
     return;
   }
 
-  await resend.emails.send({
-    from: FROM,
-    to: email,
+  await client.sendTransacEmail({
+    sender: { email: FROM_EMAIL, name: FROM_NAME },
+    to: [{ email }],
     subject: '✅ Verify your Taskora account',
-    html: `
+    htmlContent: `
       <div style="font-family:Inter,Arial,sans-serif;max-width:520px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">
         <div style="background:#4F46E5;padding:32px 40px;text-align:center;">
           <h1 style="color:#ffffff;margin:0;font-size:24px;font-weight:700;letter-spacing:-0.5px;">Taskora</h1>
@@ -55,9 +58,7 @@ export async function sendVerificationEmail(email: string, token: string): Promi
               Verify Email Address
             </a>
           </div>
-          <p style="color:#9ca3af;font-size:13px;margin:0 0 8px;">
-            Or copy this link into your browser:
-          </p>
+          <p style="color:#9ca3af;font-size:13px;margin:0 0 8px;">Or copy this link into your browser:</p>
           <p style="background:#f3f4f6;border-radius:6px;padding:10px 14px;font-size:12px;color:#6b7280;word-break:break-all;margin:0 0 28px;">
             ${link}
           </p>
