@@ -6,6 +6,7 @@ import Dashboard from "./pages/Dashboard";
 import NotFound from "./pages/NotFound";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
+import VerifyEmail from "./pages/VerifyEmail";
 import CreateProject from "./pages/CreateProject";
 import ProjectDashboard from "./pages/ProjectDashboard";
 import AssignedTasks from "./pages/AssignedTasks";
@@ -42,6 +43,7 @@ export default function App() {
             <Routes>
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
+              <Route path="/verify-email" element={<VerifyEmail />} />
 
               <Route element={<ProtectedLayout />}>
                 <Route path="/" element={<Dashboard />} />

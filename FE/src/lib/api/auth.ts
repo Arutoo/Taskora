@@ -1,5 +1,5 @@
 import { apiRequest } from "./client";
-import type { AuthResponse, LoginRequest, SignupRequest } from "./types";
+import type { ApiUser, AuthResponse, LoginRequest, SignupRequest } from "./types";
 
 export function loginRequest(payload: LoginRequest) {
   return apiRequest<AuthResponse>("/auth/login", {
@@ -9,9 +9,15 @@ export function loginRequest(payload: LoginRequest) {
 }
 
 export function signupRequest(payload: SignupRequest) {
-  return apiRequest<AuthResponse>("/auth/register", {
+  return apiRequest<ApiUser>("/auth/register", {
     method: "POST",
     body: JSON.stringify(payload),
+  });
+}
+
+export function verifyEmailRequest(token: string) {
+  return apiRequest<{ message: string }>(`/auth/verify-email?token=${encodeURIComponent(token)}`, {
+    method: "GET",
   });
 }
 
