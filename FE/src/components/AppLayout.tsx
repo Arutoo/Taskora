@@ -64,7 +64,10 @@ export default function AppLayout({ children }: AppLayoutProps) {
   useEffect(() => {
     if (!isAuthenticated) return;
     if (!accessToken) return;
-    const socketUrl = (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:3000";
+    const socketUrl =
+    (import.meta.env.VITE_SOCKET_URL as string | undefined) ??
+    (import.meta.env.VITE_API_URL as string | undefined) ??
+    "http://localhost:3000";
 
     const socket = io(socketUrl, {
       auth: { token: accessToken },
