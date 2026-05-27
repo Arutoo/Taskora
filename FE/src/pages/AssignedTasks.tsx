@@ -1,5 +1,4 @@
 import { motion } from "framer-motion";
-import { ChevronDown, X } from "lucide-react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import { listWorkspaces } from "../lib/api/workspaces";
@@ -18,8 +17,6 @@ export default function AssignedTasks() {
   const navigate = useNavigate();
   const [filter, setFilter] = useState<TaskFilter>("All");
   const [workspaceFilter, setWorkspaceFilter] = useState("all");
-  const [pendingWorkspaceFilter, setPendingWorkspaceFilter] = useState("all");
-  const [isWorkspaceFilterOpen, setIsWorkspaceFilterOpen] = useState(false);
   const { isAuthenticated, user } = useAuth();
   const [workspaces, setWorkspaces] = useState<ApiWorkspace[]>([]);
   const [tasks, setTasks] = useState<Array<ApiTask & { workspaceName: string }>>([]);
@@ -107,20 +104,9 @@ export default function AssignedTasks() {
   }, [statusFilter, tasks, workspaceFilter]);
 
   const selectedWorkspaceName = workspaces.find((workspace) => workspace.id === workspaceFilter)?.name;
-  const workspaceFilterLabel = selectedWorkspaceName ?? "All Workspaces";
   const subtitle = selectedWorkspaceName
     ? `Tasks assigned to you in ${selectedWorkspaceName}`
     : "Tasks assigned to you across every workspace";
-
-  const openWorkspaceFilter = () => {
-    setPendingWorkspaceFilter(workspaceFilter);
-    setIsWorkspaceFilterOpen(true);
-  };
-
-  const applyWorkspaceFilter = () => {
-    setWorkspaceFilter(pendingWorkspaceFilter);
-    setIsWorkspaceFilterOpen(false);
-  };
 
   return (
     <div className="pageStack">
@@ -130,10 +116,21 @@ export default function AssignedTasks() {
       </motion.div>
 
       <div className="filterBar">
-        <button type="button" onClick={openWorkspaceFilter} className="filterDropdownBtn">
-          <span>Workspace: {workspaceFilterLabel}</span>
-          <ChevronDown size={15} />
-        </button>
+        <label className="filterSelectShell">
+          <span>Workspace</span>
+          <select
+            className="filterSelect"
+            value={workspaceFilter}
+            onChange={(event) => setWorkspaceFilter(event.target.value)}
+          >
+            <option value="all">All Workspaces</option>
+            {workspaces.map((workspace) => (
+              <option key={workspace.id} value={workspace.id}>
+                {workspace.name}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
 
       <div className="filterBar">
@@ -184,48 +181,6 @@ export default function AssignedTasks() {
         </div>
       </motion.div>
 
-      {isWorkspaceFilterOpen ? (
-        <div role="dialog" aria-modal="true" className="modalOverlay" onClick={() => setIsWorkspaceFilterOpen(false)}>
-          <div className="card cardPad4 modalDialog workspaceFilterModal" onClick={(event) => event.stopPropagation()}>
-            <div className="sectionHeaderRow">
-              <h3 className="sectionTitle">Filter by workspace</h3>
-              <button
-                className="ghostBtn iconOnlyBtn"
-                type="button"
-                onClick={() => setIsWorkspaceFilterOpen(false)}
-                aria-label="Close workspace filter"
-              >
-                <X size={15} />
-              </button>
-            </div>
-
-            <label className="formField">
-              <span className="formLabel">Workspace</span>
-              <select
-                className="formInput"
-                value={pendingWorkspaceFilter}
-                onChange={(event) => setPendingWorkspaceFilter(event.target.value)}
-              >
-                <option value="all">All Workspaces</option>
-                {workspaces.map((workspace) => (
-                  <option key={workspace.id} value={workspace.id}>
-                    {workspace.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <div className="formActions">
-              <button className="ghostBtn" type="button" onClick={() => setIsWorkspaceFilterOpen(false)}>
-                Cancel
-              </button>
-              <button className="primaryBtn" type="button" onClick={applyWorkspaceFilter}>
-                Apply filter
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }

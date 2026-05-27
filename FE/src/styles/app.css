@@ -383,7 +383,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .statusCompleted { background: var(--c-success); box-shadow: 0 0 0 4px color-mix(in srgb, var(--c-success) 18%, transparent); }
 .statusOverdue { font-size: 12px; font-weight: 800; color: color-mix(in srgb, var(--c-destructive) 82%, white 8%); letter-spacing: 0.02em; }
 
-.sectionActionBtn, .ghostBtn, .primaryBtn, .dangerBtn, .memberSearchBtn, .memberResultBtn, .filterChip, .filterDropdownBtn {
+.sectionActionBtn, .ghostBtn, .primaryBtn, .dangerBtn, .memberSearchBtn, .memberResultBtn, .filterChip {
   cursor: pointer;
   transition: background 180ms ease, color 180ms ease, border-color 180ms ease, transform 180ms ease, box-shadow 180ms ease, filter 180ms ease;
 }
@@ -737,30 +737,31 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 }
 
 .filterBar { display: flex; gap: 8px; flex-wrap: wrap; }
-.filterDropdownBtn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  max-width: min(360px, 100%);
-  padding: 10px 13px;
+.filterSelectShell {
+  display: inline-grid;
+  gap: 6px;
+  width: min(360px, 100%);
+}
+.filterSelectShell span {
+  color: var(--c-muted-foreground);
+  font-size: 12px;
+  font-weight: 750;
+}
+.filterSelect {
+  width: 100%;
+  padding: 10px 38px 10px 13px;
   border-radius: 12px;
   border: 1px solid color-mix(in srgb, var(--c-border) 58%, transparent);
   background: color-mix(in srgb, var(--c-secondary) 64%, transparent);
   color: var(--c-card-foreground);
   font-size: 13px;
   font-weight: 850;
+  outline: none;
+  cursor: pointer;
 }
-.filterDropdownBtn span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.filterDropdownBtn:hover {
-  color: var(--c-foreground);
+.filterSelect:hover,
+.filterSelect:focus {
   border-color: color-mix(in srgb, var(--c-primary) 34%, transparent);
-  transform: translateY(-1px);
 }
 .filterChip {
   padding: 8px 12px;
@@ -856,7 +857,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   z-index: 90;
 }
 .modalDialog { width: min(560px, 92vw); max-height: min(760px, 92dvh); overflow: auto; }
-.workspaceFilterModal { width: min(460px, 92vw); }
 .taskDetailGrid { display: grid; gap: 22px; }
 .taskHeroRow { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .taskStatusLine { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
