@@ -7,7 +7,6 @@ import TaskRow from "../components/TaskRow";
 import type { TaskRowItem } from "../components/TaskRow";
 import {
   archiveWorkspace,
-  createInviteLink,
   getWorkspace,
   inviteToWorkspace,
   leaveWorkspace,
@@ -24,11 +23,12 @@ import { useAuth } from "../lib/use-auth";
 
 type DashboardDeadline = {
   date: number;
+  dateValue: string;
   color: string;
   overdue?: boolean;
   title: string;
   kind: "start" | "deadline";
-  endDate?: number;
+  endDate?: string;
 };
 
 const contributionColors = [
@@ -87,7 +87,6 @@ export default function ProjectDashboard() {
   const [isCreatingTask, setIsCreatingTask] = useState(false);
   const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [inviteWarning, setInviteWarning] = useState<string | null>(null);
-  const [isGeneratingInviteToken, setIsGeneratingInviteToken] = useState(false);
   const [inviteTokenError, setInviteTokenError] = useState<string | null>(null);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [memberEmail, setMemberEmail] = useState("");
@@ -167,17 +166,19 @@ export default function ProjectDashboard() {
       const entries: DashboardDeadline[] = [];
       if (task.start_date) {
         entries.push({
-          date: new Date(task.start_date).getDate(),
+          date: Number(task.start_date.slice(8, 10)),
+          dateValue: task.start_date,
           color: "var(--c-accent-2)",
           title: task.title,
           kind: "start",
-          endDate: task.deadline ? new Date(task.deadline).getDate() : undefined,
+          endDate: task.deadline ?? undefined,
         });
       }
 
       if (task.deadline && task.status !== "done") {
         entries.push({
-          date: new Date(task.deadline).getDate(),
+          date: Number(task.deadline.slice(8, 10)),
+          dateValue: task.deadline,
           color: "#66aaff",
           overdue: task.is_overdue,
           title: task.title,
@@ -462,21 +463,6 @@ export default function ProjectDashboard() {
     }
   };
 
-  const handleGenerateInviteToken = async () => {
-    if (!id || !isLeader || isGeneratingInviteToken) return;
-    try {
-      setIsGeneratingInviteToken(true);
-      setInviteTokenError(null);
-      const result = await createInviteLink(id);
-      setInviteCode(result.inviteCode);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to generate invite code";
-      setInviteTokenError(message);
-    } finally {
-      setIsGeneratingInviteToken(false);
-    }
-  };
-
   const handleCopyInvite = async () => {
     if (!inviteLink) return;
     try {
@@ -573,28 +559,19 @@ export default function ProjectDashboard() {
         </div>
       ) : null}
 
-      {isLeader ? (
+      {isLeader && inviteCode ? (
         <div className="card" style={{ padding: 16, display: "flex", gap: 10, alignItems: "center" }}>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 12, color: "var(--c-muted-foreground)", marginBottom: 6 }}>Invite code</div>
-            {inviteCode ? (
-              <div style={{ display: "grid", gap: 8 }}>
-                <input className="formInput font-mono" value={inviteCode} readOnly />
-                <input className="formInput font-mono" value={inviteLink} readOnly />
-              </div>
-            ) : (
-              <p className="muted" style={{ margin: 0 }}>Generate a short code and shareable link for invitees.</p>
-            )}
+            <div style={{ display: "grid", gap: 8 }}>
+              <input className="formInput font-mono" value={inviteCode} readOnly />
+              <input className="formInput font-mono" value={inviteLink} readOnly />
+            </div>
             {inviteTokenError ? <p className="emptyStateText errorText" style={{ margin: "8px 0 0" }}>{inviteTokenError}</p> : null}
           </div>
-          <button className="ghostBtn" type="button" onClick={handleGenerateInviteToken} disabled={isGeneratingInviteToken}>
-            {isGeneratingInviteToken ? "Generating..." : inviteCode ? "New code" : "Generate code"}
+          <button className="ghostBtn" type="button" onClick={handleCopyInvite}>
+            Copy link
           </button>
-          {inviteCode ? (
-            <button className="ghostBtn" type="button" onClick={handleCopyInvite}>
-              Copy link
-            </button>
-          ) : null}
         </div>
       ) : null}
 
@@ -609,7 +586,7 @@ export default function ProjectDashboard() {
         </div>
         {isLeader ? (
           <button className="ghostBtn" type="button" onClick={handleDeleteProject} disabled={isDeleting}>
-            {isDeleting ? "Archiving..." : "Archive project"}
+            {isDeleting ? "Deleting..." : "Delete project"}
           </button>
         ) : null}
       </motion.div>
@@ -926,9 +903,6 @@ export default function ProjectDashboard() {
           <div className="card cardPad4 modalDialog" onClick={(event) => event.stopPropagation()}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
               <h3 className="sectionTitle" style={{ margin: 0 }}>New task</h3>
-              <button className="ghostBtn" type="button" onClick={closeTaskModal}>
-                Close
-              </button>
             </div>
 
             <div style={{ display: "grid", gap: 10 }}>
@@ -1011,7 +985,7 @@ export default function ProjectDashboard() {
                   {isCreatingTask ? "Creating task..." : "Create task"}
                 </button>
               </div>
-              {taskError ? <p className="muted" style={{ margin: 0 }}>{taskError}</p> : null}
+              {taskError ? <p className="formWarning" style={{ margin: 0 }}>{taskError}</p> : null}
             </div>
           </div>
         </div>

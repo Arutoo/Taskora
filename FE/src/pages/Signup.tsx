@@ -23,6 +23,11 @@ export default function Signup() {
     const name = String(formData.get("name") ?? "").trim();
     const email = String(formData.get("email") ?? "").trim().toLowerCase();
     const password = String(formData.get("password") ?? "");
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters.");
+      setIsSubmitting(false);
+      return;
+    }
 
     try {
       const user = await signupRequest({ name, email, password });
@@ -68,6 +73,7 @@ export default function Signup() {
           <label className="authField">
             <span className="authLabel">Password</span>
             <input className="authInput" type="password" name="password" placeholder="Create a password" required />
+            <span className="authHint">Minimum 8 characters</span>
           </label>
 
           <button className="authButton" type="submit" disabled={isSubmitting}>

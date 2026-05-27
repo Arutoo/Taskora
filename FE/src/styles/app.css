@@ -383,7 +383,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .statusCompleted { background: var(--c-success); box-shadow: 0 0 0 4px color-mix(in srgb, var(--c-success) 18%, transparent); }
 .statusOverdue { font-size: 12px; font-weight: 800; color: color-mix(in srgb, var(--c-destructive) 82%, white 8%); letter-spacing: 0.02em; }
 
-.sectionActionBtn, .ghostBtn, .primaryBtn, .dangerBtn, .memberSearchBtn, .memberResultBtn, .filterChip {
+.sectionActionBtn, .ghostBtn, .primaryBtn, .dangerBtn, .memberSearchBtn, .memberResultBtn, .filterChip, .filterDropdownBtn {
   cursor: pointer;
   transition: background 180ms ease, color 180ms ease, border-color 180ms ease, transform 180ms ease, box-shadow 180ms ease, filter 180ms ease;
 }
@@ -534,8 +534,25 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   font-weight: 850;
 }
 
-.calendarHeader { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.calendarHeader { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.calendarNav { display: inline-flex; align-items: center; gap: 8px; }
+.calendarMonthLabel {
+  min-width: 118px;
+  text-align: center;
+  color: var(--c-muted-foreground);
+  font-size: 12px;
+  font-weight: 850;
+}
 .calendarGrid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; }
+.calendarWeekdays { margin-bottom: 8px; }
+.calendarWeekday {
+  display: grid;
+  place-items: center;
+  min-height: 18px;
+  color: var(--c-muted-foreground);
+  font-size: 11px;
+  font-weight: 850;
+}
 .calendarCell {
   aspect-ratio: 1;
   min-height: 34px;
@@ -549,6 +566,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
 }
 .calendarCell:hover { transform: translateY(-1px); border-color: color-mix(in srgb, var(--c-primary) 26%, transparent); }
+.calendarPlaceholder {
+  visibility: hidden;
+  pointer-events: none;
+}
 .calendarCell.today {
   color: var(--c-primary-foreground);
   background: color-mix(in srgb, var(--c-primary) 84%, white 6%);
@@ -639,6 +660,15 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 }
 .formTextarea { resize: vertical; min-height: 96px; }
 .formActions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 8px; }
+.formWarning {
+  color: color-mix(in srgb, var(--c-destructive) 88%, white 10%);
+  border: 1px solid color-mix(in srgb, var(--c-destructive) 42%, transparent);
+  background: color-mix(in srgb, var(--c-destructive) 13%, transparent);
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 850;
+}
 .memberList, .memberResults { display: flex; flex-wrap: wrap; gap: 8px; }
 .memberChip {
   display: inline-flex;
@@ -707,6 +737,31 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 }
 
 .filterBar { display: flex; gap: 8px; flex-wrap: wrap; }
+.filterDropdownBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  max-width: min(360px, 100%);
+  padding: 10px 13px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--c-border) 58%, transparent);
+  background: color-mix(in srgb, var(--c-secondary) 64%, transparent);
+  color: var(--c-card-foreground);
+  font-size: 13px;
+  font-weight: 850;
+}
+.filterDropdownBtn span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.filterDropdownBtn:hover {
+  color: var(--c-foreground);
+  border-color: color-mix(in srgb, var(--c-primary) 34%, transparent);
+  transform: translateY(-1px);
+}
 .filterChip {
   padding: 8px 12px;
   font-size: 12px;
@@ -801,6 +856,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   z-index: 90;
 }
 .modalDialog { width: min(560px, 92vw); max-height: min(760px, 92dvh); overflow: auto; }
+.workspaceFilterModal { width: min(460px, 92vw); }
 .taskDetailGrid { display: grid; gap: 22px; }
 .taskHeroRow { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .taskStatusLine { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -1296,6 +1352,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .authSubtitle { margin: 0 0 22px; font-size: 14px; color: var(--c-muted-foreground); }
 .authForm { display: grid; gap: 14px; }
 .authField { display: grid; gap: 6px; }
+.authHint { color: var(--c-muted-foreground); font-size: 12px; }
 .authButton { width: 100%; margin-top: 6px; padding: 13px 16px; font-size: 16px; }
 .authAlt { margin: 18px 0 0; font-size: 12px; color: var(--c-muted-foreground); text-align: center; }
 .authAlt a { color: var(--c-foreground); text-decoration: none; border-bottom: 1px solid color-mix(in srgb, var(--c-foreground) 45%, transparent); }
